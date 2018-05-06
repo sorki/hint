@@ -103,3 +103,4 @@ library
                Rank2Types
                ScopedTypeVariables
                ExistentialQuantification
+               LambdaCase

@@ -9,8 +9,7 @@ import qualified GHC.Exts (unsafeCoerce#)
 
 import Control.Exception
 
-import Data.Typeable hiding (typeOf)
-import qualified Data.Typeable (typeOf)
+import Data.Typeable
 
 import Hint.Base
 import Hint.Context
@@ -31,7 +30,7 @@ infer = undefined
 
 -- | Evaluates an expression, given a witness for its monomorphic type.
 interpret :: (MonadInterpreter m, Typeable a) => String -> a -> m a
-interpret expr wit = unsafeInterpret expr (show $ Data.Typeable.typeOf wit)
+interpret expr wit = unsafeInterpret expr (show $ typeOf wit)
 
 unsafeInterpret :: (MonadInterpreter m) => String -> String -> m a
 unsafeInterpret expr type_str =

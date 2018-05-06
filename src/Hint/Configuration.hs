@@ -86,7 +86,7 @@ languageExtensions = Option setter getter
           getter = fromConf languageExts
           --
           resetExtensions = do es <- fromState defaultExts
-                               setGhcOptions $ map (uncurry $ flip extFlag) es
+                               setGhcOptions $ uncurry (flip extFlag) <$> es
 
 extFlag :: Bool -> Extension -> String
 extFlag = mkFlag

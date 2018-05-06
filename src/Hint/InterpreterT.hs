@@ -88,7 +88,7 @@ initialize args =
        -- available; calling this function once is mandatory!
        _ <- runGhc1 GHC.setSessionDynFlags df2{GHC.log_action = log_handler}
 
-       let extMap      = map (\fs -> (GHC.flagSpecName fs, GHC.flagSpecFlag fs)) GHC.xFlags
+       let extMap      = liftA2 (,) GHC.flagSpecName GHC.flagSpecFlag <$> GHC.xFlags
        let toOpt e     = let err = error ("init error: unknown ext:" ++ show e)
                          in fromMaybe err (lookup e extMap)
        let getOptVal e = (asExtension e, GHC.xopt (toOpt e) df2)
@@ -135,11 +135,9 @@ uniqueToken :: MVar ()
 uniqueToken = unsafePerformIO $ newMVar ()
 
 ifInterpreterNotRunning :: (MonadIO m, MonadMask m) => m a -> m a
-ifInterpreterNotRunning action =
-    do maybe_token <- liftIO $ tryTakeMVar uniqueToken
-       case maybe_token of
-           Nothing -> throwM MultipleInstancesNotAllowed
-           Just x  -> action `finally` liftIO (putMVar uniqueToken x)
+ifInterpreterNotRunning action = liftIO (tryTakeMVar uniqueToken) >>= \ case
+    Nothing -> throwM MultipleInstancesNotAllowed
+    Just x  -> action `finally` liftIO (putMVar uniqueToken x)
 
 -- | The installed version of ghc is not thread-safe. This exception
 --   is thrown whenever you try to execute @runInterpreter@ while another

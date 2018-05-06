@@ -18,7 +18,7 @@ import Data.List
 
 import Control.Arrow ((***))
 
-import Control.Monad       (liftM, filterM, unless, guard, foldM, (>=>))
+import Control.Monad       (filterM, unless, guard, foldM, (>=>))
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Catch
 
@@ -170,7 +170,7 @@ removePhantomModule pm =
                      --
                      let isNotPhantom = isPhantomModule . moduleToString  >=>
                                           return . not
-                     null `liftM` filterM isNotPhantom mods'
+                     null <$> filterM isNotPhantom mods'
              else return True
        --
        let file_name = pmFile pm
@@ -240,7 +240,7 @@ isModuleInterpreted m = findModule m >>= runGhc1 GHC.moduleIsInterpreted
 -- | Returns the list of modules loaded with 'loadModules'.
 getLoadedModules :: MonadInterpreter m => m [ModuleName]
 getLoadedModules = do (active_pms, zombie_pms) <- getPhantomModules
-                      ms <- map modNameFromSummary `liftM` getLoadedModSummaries
+                      ms <- map modNameFromSummary <$> getLoadedModSummaries
                       return $ ms \\ map pmName (active_pms ++ zombie_pms)
 
 modNameFromSummary :: GHC.ModSummary -> ModuleName
@@ -248,9 +248,8 @@ modNameFromSummary = moduleToString . GHC.ms_mod
 
 getLoadedModSummaries :: MonadInterpreter m => m [GHC.ModSummary]
 getLoadedModSummaries =
-  do all_mod_summ <- runGhc GHC.getModuleGraph
-     filterM (runGhc1 GHC.isLoaded . GHC.ms_mod_name)
-             (GHC.mgModSummaries all_mod_summ)
+    runGhc GHC.getModuleGraph >>=
+    filterM (runGhc1 GHC.isLoaded . GHC.ms_mod_name) . GHC.mgModSummaries
 
 -- | Sets the modules whose context is used during evaluation. All bindings
 --   of these modules are in scope, not only those exported.
