@@ -90,14 +90,10 @@ getContext = GHC.getContext >>= foldM f ([], [])
          m ([GHC.Module], [GHC.ImportDecl GHC.GhcPs])
     f (ns, ds) i = case i of
       (GHC.IIDecl d)     -> return (ns, d : ds)
-      m@(GHC.IIModule _) -> do n <- iiModToMod m; return (n : ns, ds)
+      (GHC.IIModule m) -> do n <- GHC.findModule m Nothing; return (n : ns, ds)
 
 modToIIMod :: GHC.Module -> GHC.InteractiveImport
 modToIIMod = GHC.IIModule . GHC.moduleName
-
-iiModToMod :: GHC.GhcMonad m => GHC.InteractiveImport -> m GHC.Module
-iiModToMod (GHC.IIModule m) = GHC.findModule m Nothing
-iiModToMod _ = error "iiModToMod!"
 
 getContextNames :: GHC.GhcMonad m => m([String], [String])
 getContextNames = fmap (map name *** map decl) getContext

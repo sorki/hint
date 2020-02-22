@@ -163,7 +163,7 @@ initialState = St {
                    hintSupportModule = error "No support module loaded!",
                    importQualHackMod = Nothing,
                    qualImports       = [],
-                   defaultExts       = error "defaultExts missing!",
+                   defaultExts       = [],
                    configuration     = defaultConf
                   }
 
