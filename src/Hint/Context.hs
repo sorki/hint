@@ -19,7 +19,7 @@ import Data.List
 import Control.Arrow ((***))
 
 import Control.Monad       (filterM, unless, guard, foldM, (>=>))
-import Control.Monad.Trans (liftIO)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Catch
 
 import Hint.Base

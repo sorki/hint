@@ -4,7 +4,7 @@ import Prelude hiding (span)
 
 import Hint.Base
 
-import Control.Monad.Trans (liftIO)
+import Control.Monad.IO.Class (liftIO)
 
 import qualified Hint.GHC as GHC
 

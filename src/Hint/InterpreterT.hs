@@ -12,7 +12,10 @@ import Hint.Context
 import Hint.Configuration
 import Hint.Extension
 
-import Control.Monad.Reader
+import Control.Monad (ap, unless)
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Reader
 import Control.Monad.Catch as MC
 
 import Data.Typeable (Typeable)

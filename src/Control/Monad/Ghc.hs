@@ -6,8 +6,8 @@ import Control.Applicative
 import Prelude
 
 import Control.Monad
-import Control.Monad.Trans
-import qualified Control.Monad.Trans as MTL
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
 
 import Control.Monad.Catch
 
@@ -40,10 +40,10 @@ rawRunGhcT mb_top_dir ghct = do
 runGhcT :: (MonadIO m, MonadMask m) => Maybe FilePath -> GhcT m a -> m a
 runGhcT f = unMTLA . rawRunGhcT f . unGhcT
 
-instance MTL.MonadTrans GhcT where
+instance MonadTrans GhcT where
     lift = GhcT . GHC.liftGhcT . MTLAdapter
 
-instance MTL.MonadIO m => MTL.MonadIO (GhcT m) where
+instance MonadIO m => MonadIO (GhcT m) where
     liftIO = GhcT . GHC.liftIO
 
 instance MonadCatch m => MonadThrow (GhcT m) where
@@ -87,8 +87,8 @@ instance (Functor m, MonadIO m, MonadCatch m, MonadMask m) => GHC.GhcMonad (GhcT
 --   like 'MTL'''s 'MonadIO' and 'GHC'''s 'MonadIO'.
 newtype MTLAdapter m a = MTLAdapter {unMTLA :: m a} deriving (Functor, Applicative, Monad)
 
-instance MTL.MonadIO m => GHC.MonadIO (MTLAdapter m) where
-    liftIO = MTLAdapter . MTL.liftIO
+instance MonadIO m => GHC.MonadIO (MTLAdapter m) where
+    liftIO = MTLAdapter . liftIO
 
 instance (MonadIO m, MonadCatch m, MonadMask m) => GHC.ExceptionMonad (MTLAdapter m) where
   m `gcatch` f = MTLAdapter $ unMTLA m `catch` (unMTLA . f)

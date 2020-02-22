@@ -19,7 +19,7 @@ module Hint.Base (
     debug, showGHC
 ) where
 
-import Control.Monad.Trans
+import Control.Monad.IO.Class
 import Control.Monad.Catch as MC
 
 import Data.IORef

@@ -43,7 +43,8 @@ module Language.Haskell.Interpreter(
      InterpreterError(..), GhcError(..), MultipleInstancesNotAllowed(..),
     -- * Miscellaneous
      ghcVersion, parens,
-     module Control.Monad.Trans
+     module Control.Monad.Trans.Class,
+     module Control.Monad.IO.Class,
 ) where
 
 import Hint.Base
@@ -55,4 +56,5 @@ import Hint.Reflection
 import Hint.Typecheck
 import Hint.Eval
 
-import Control.Monad.Trans
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
