@@ -68,7 +68,9 @@ testHint =
       say $ show $ not bool_val
       emptyLine
       say "Here we evaluate an expression of type string, that when evaluated (again) leads to a string"
-      res <- interpret "head $ map show [\"Worked!\", \"Didn't work\"]" infer >>= flip interpret infer
+      res <- do
+        s <- interpret "head $ map show [\"Worked!\", \"Didn't work\"]" infer
+        interpret s infer
       say res
       emptyLine
       say "We can also execute statements in the IO monad and bind new names, e.g."
