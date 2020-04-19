@@ -297,18 +297,19 @@ ioTests = [test_signal_handlers
 
 main :: IO ()
 main = do
-  thread1 <- newEmptyMVar
-  thread2 <- newEmptyMVar
-  let thread :: Int -> IO ()
-      thread i = do
-        let threadName = "Thread" ++ show i
-        let prefix = threadName ++ "_"
-        say $ Text.pack threadName <> " started"
-        main2 prefix
-        say $ Text.pack threadName <> " done"
-        putMVar thread1 ()
-  _ <- forkIO $ thread 1
-  _ <- forkIO $ thread 2
+  let forkThread :: Int -> IO (MVar ())
+      forkThread i = do
+        mvar <- newEmptyMVar
+        _ <- forkIO $ do
+          let threadName = "Thread" ++ show i
+          let prefix = threadName ++ "_"
+          say $ Text.pack threadName <> " started"
+          main2 prefix
+          say $ Text.pack threadName <> " done"
+          putMVar mvar ()
+        pure mvar
+  thread1 <- forkThread 1
+  thread2 <- forkThread 2
   takeMVar thread1
   takeMVar thread2
 
