@@ -1,5 +1,9 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Main (main) where
 
+import Say
+import Data.Traversable
+import qualified Data.Text as Text
 import Prelude hiding (catch)
 
 import Control.Exception.Extensible (ArithException(..), AsyncException(UserInterrupt))
@@ -26,8 +30,8 @@ import qualified Test.HUnit as HUnit
 
 import Language.Haskell.Interpreter
 
-test_reload_modified :: TestCase
-test_reload_modified = TestCase "reload_modified" [mod_file] $ do
+test_reload_modified :: String -> TestCase
+test_reload_modified prefix = TestCase "reload_modified" [mod_file] $ do
                             liftIO $ writeFile mod_file mod_v1
                             f_v1 <- get_f
                             --
@@ -36,7 +40,7 @@ test_reload_modified = TestCase "reload_modified" [mod_file] $ do
                             --
                             liftIO $ (f_v1 5, f_v2 5) @?= (5, 6)
     --
-    where mod_name = "TEST_ReloadModified"
+    where mod_name = prefix ++ "TEST_ReloadModified"
           mod_file = mod_name ++ ".hs"
           --
           mod_v1   = unlines ["module " ++ mod_name,
@@ -52,8 +56,8 @@ test_reload_modified = TestCase "reload_modified" [mod_file] $ do
                         setTopLevelModules [mod_name]
                         interpret "f" (as :: Int -> Int)
 
-test_lang_exts :: TestCase
-test_lang_exts = TestCase "lang_exts" [mod_file] $ do
+test_lang_exts :: String -> TestCase
+test_lang_exts prefix = TestCase "lang_exts" [mod_file] $ do
                       liftIO $ writeFile mod_file "data T where T :: T"
                       fails do_load @@? "first time, it shouldn't load"
                       --
@@ -63,13 +67,13 @@ test_lang_exts = TestCase "lang_exts" [mod_file] $ do
                       set [languageExtensions := []]
                       fails do_load @@? "it shouldn't load, again"
     --
-    where mod_name = "TEST_LangExts"
+    where mod_name = prefix ++ "TEST_LangExts"
           mod_file = mod_name ++ ".hs"
           --
           do_load  = loadModules [mod_name]
 
-test_work_in_main :: TestCase
-test_work_in_main = TestCase "work_in_main" [mod_file] $ do
+test_work_in_main :: String -> TestCase
+test_work_in_main prefix = TestCase "work_in_main" [mod_file] $ do
                         liftIO $ writeFile mod_file "f = id"
                         loadModules [mod_file]
                         setTopLevelModules ["Main"]
@@ -80,10 +84,10 @@ test_work_in_main = TestCase "work_in_main" [mod_file] $ do
                         eval "f . Mb.fromJust $ Just [1,2]" @@?= "[1,2]"
                         interpret "f $ 1 == 2" infer @@?= False
     --
-    where mod_file     = "TEST_WorkInMain.hs"
+    where mod_file     = prefix ++ "TEST_WorkInMain.hs"
 
-test_priv_syms_in_scope :: TestCase
-test_priv_syms_in_scope = TestCase "private_syms_in_scope" [mod_file] $ do
+test_priv_syms_in_scope :: String -> TestCase
+test_priv_syms_in_scope prefix = TestCase "private_syms_in_scope" [mod_file] $ do
                                -- must set to True, otherwise won't work with
                                -- ghc 6.8
                                set [installedModulesInScope := True]
@@ -92,10 +96,10 @@ test_priv_syms_in_scope = TestCase "private_syms_in_scope" [mod_file] $ do
                                setTopLevelModules ["T"]
                                typeChecks "g" @@? "g is hidden"
     where mod_text = unlines ["module T(f) where", "f = g", "g = id"]
-          mod_file = "TEST_PrivateSymbolsInScope.hs"
+          mod_file = prefix ++ "TEST_PrivateSymbolsInScope.hs"
 
-test_comments_in_expr :: TestCase
-test_comments_in_expr = TestCase "comments_in_expr" [] $ do
+test_comments_in_expr :: String -> TestCase
+test_comments_in_expr _ = TestCase "comments_in_expr" [] $ do
                             setImports ["Prelude"]
                             let expr = "length $ concat [[1,2],[3]] -- bla"
                             typeChecks expr @@? "comment on expression"
@@ -103,37 +107,37 @@ test_comments_in_expr = TestCase "comments_in_expr" [] $ do
                             _ <- interpret expr (as :: Int)
                             return ()
 
-test_qual_import :: TestCase
-test_qual_import = TestCase "qual_import" [] $ do
+test_qual_import :: String -> TestCase
+test_qual_import _ = TestCase "qual_import" [] $ do
                            setImportsQ [("Prelude", Nothing),
                                         ("Data.Map", Just "M")]
                            typeChecks "null []" @@? "Unqual null"
                            typeChecks "M.null M.empty" @@? "Qual null"
 
-test_full_import :: TestCase
-test_full_import = TestCase "full_import" [] $ do
+test_full_import :: String -> TestCase
+test_full_import _ = TestCase "full_import" [] $ do
                            setImportsF [ ModuleImport "Prelude" (QualifiedAs Nothing) NoImportList
                                        , ModuleImport "Data.List" (QualifiedAs $ Just "List") $ ImportList ["null"]
                                        ]
                            typeChecks "Prelude.null []" @@? "Qual prelude null"
                            typeChecks "List.null []" @@? "Qual list null"
 
-test_basic_eval :: TestCase
-test_basic_eval = TestCase "basic_eval" [] $ eval "()" @@?= "()"
+test_basic_eval :: String -> TestCase
+test_basic_eval _ = TestCase "basic_eval" [] $ eval "()" @@?= "()"
 
-test_eval_layout :: TestCase
-test_eval_layout = TestCase "eval_layout" [] $ eval layout_expr @@?= "10"
+test_eval_layout :: String -> TestCase
+test_eval_layout _ = TestCase "eval_layout" [] $ eval layout_expr @@?= "10"
     where layout_expr = unlines ["let x = let y = 10",
                                  "        in y",
                                  "in x"]
 
-test_show_in_scope :: TestCase
-test_show_in_scope = TestCase "show_in_scope" [] $ do
+test_show_in_scope :: String -> TestCase
+test_show_in_scope _ = TestCase "show_in_scope" [] $ do
                        setImports ["Prelude"]
                        eval "show ([] :: String)" @@?= show (show "")
 
-test_installed_not_in_scope :: TestCase
-test_installed_not_in_scope = TestCase "installed_not_in_scope" [] $ do
+test_installed_not_in_scope :: String -> TestCase
+test_installed_not_in_scope _ = TestCase "installed_not_in_scope" [] $ do
                                 b <- get installedModulesInScope
                                 succeeds action @@?= b
                                 set [installedModulesInScope := False]
@@ -142,8 +146,8 @@ test_installed_not_in_scope = TestCase "installed_not_in_scope" [] $ do
                                 succeeds action @@? "must be in scope again"
     where action = typeOf "Data.Map.singleton"
 
-test_search_path :: TestCase
-test_search_path =
+test_search_path :: String -> TestCase
+test_search_path prefix =
     TestCase "search_path" files $ do
            liftIO setup
            fails (loadModules [mod_1]) @@? "mod_1 should not be in path (1)"
@@ -160,10 +164,10 @@ test_search_path =
            set [searchPath := [dir_1,dir_2]]
            succeeds (loadModules [mod_1]) @@? "mod_1 should be in path (4)"
            succeeds (loadModules [mod_2]) @@? "mod_2 should be in path (4)"
-    where dir_1  = "search_path_test_dir_1"
+    where dir_1  = prefix ++ "search_path_test_dir_1"
           mod_1  = "M1"
           file_1 = dir_1 </> mod_1 <.> "hs"
-          dir_2  = "search_path_test_dir_2"
+          dir_2  = prefix ++ "search_path_test_dir_2"
           mod_2  = "M2"
           file_2 = dir_2 </> mod_2 <.> "hs"
           files  = [file_1, file_2, dir_1, dir_2]
@@ -180,23 +184,23 @@ test_search_path =
                                   "y :: Bool",
                                   "y = False"]
 
-test_search_path_dot :: TestCase
-test_search_path_dot =
+test_search_path_dot :: String -> TestCase
+test_search_path_dot prefix =
     TestCase "search_path_dot" [mod_file, dir] $ do
            liftIO setup
            succeeds (loadModules [mod1]) @@? "mod1 must be initially in path"
            set [searchPath := [dir]]
            succeeds (loadModules [mod1]) @@? "mod1 must be still in path"
     --
-    where dir      = "search_path_dot_dir"
+    where dir      = prefix ++ "search_path_dot_dir"
           mod1     = "M1"
           mod_file = mod1 <.> "hs"
           setup    = do createDirectory dir
                         writeFile mod_file $
                            unlines ["x :: Int", "x = 42"]
 
-test_catch :: TestCase
-test_catch = TestCase "catch" [] $ do
+test_catch :: String -> TestCase
+test_catch _ = TestCase "catch" [] $ do
         setImports ["Prelude"]
         succeeds (action `catch` handler) @@? "catch failed"
     where handler DivideByZero = return "catched"
@@ -204,8 +208,8 @@ test_catch = TestCase "catch" [] $ do
           action = do s <- eval "1 `div` 0 :: Int"
                       return $! s
 
-test_only_one_instance :: TestCase
-test_only_one_instance = TestCase "only_one_instance" [] $ liftIO $ do
+test_only_one_instance :: String -> TestCase
+test_only_one_instance _ = TestCase "only_one_instance" [] $ liftIO $ do
         r <- newEmptyMVar
         let concurrent = runInterpreter (liftIO $ putMVar r False)
                           `catch` \MultipleInstancesNotAllowed ->
@@ -214,8 +218,8 @@ test_only_one_instance = TestCase "only_one_instance" [] $ liftIO $ do
         _ <- forkIO $ Control.Monad.void concurrent
         readMVar r @?  "concurrent instance did not fail"
 
-test_normalize_type :: TestCase
-test_normalize_type = TestCase "normalize_type" [mod_file] $ do
+test_normalize_type :: String -> TestCase
+test_normalize_type prefix = TestCase "normalize_type" [mod_file] $ do
         liftIO $ writeFile mod_file mod_text
         loadModules [mod_file]
         setTopLevelModules ["T"]
@@ -225,7 +229,7 @@ test_normalize_type = TestCase "normalize_type" [mod_file] $ do
                              ,"module T where"
                              ,"type family Foo x"
                              ,"type instance Foo x = ()"]
-          mod_file = "TEST_NormalizeType.hs"
+          mod_file = prefix ++ "TEST_NormalizeType.hs"
 
 -- earlier versions of hint were accidentally overwriting the signal handlers
 -- for ^C and others.
@@ -268,23 +272,23 @@ test_signal_handlers = IOTestCase "signal_handlers" [] $ \runInterp -> do
         return r
 #endif
 
-tests :: [TestCase]
-tests = [test_reload_modified
-        ,test_lang_exts
-        ,test_work_in_main
-        ,test_comments_in_expr
-        ,test_qual_import
-        ,test_full_import
-        ,test_basic_eval
-        ,test_eval_layout
-        ,test_show_in_scope
-        ,test_installed_not_in_scope
-        ,test_priv_syms_in_scope
-        ,test_search_path
-        ,test_search_path_dot
-        ,test_catch
-        ,test_only_one_instance
-        ,test_normalize_type
+tests :: String -> [TestCase]
+tests prefix = [test_reload_modified prefix
+        ,test_lang_exts prefix
+        ,test_work_in_main prefix
+        ,test_comments_in_expr prefix
+        ,test_qual_import prefix
+        ,test_full_import prefix
+        ,test_basic_eval prefix
+        ,test_eval_layout prefix
+        ,test_show_in_scope prefix
+        ,test_installed_not_in_scope prefix
+        ,test_priv_syms_in_scope prefix
+        ,test_search_path prefix
+        ,test_search_path_dot prefix
+        ,test_catch prefix
+        --,test_only_one_instance
+        ,test_normalize_type prefix
         ]
 
 ioTests :: [IOTestCase]
@@ -292,11 +296,28 @@ ioTests = [test_signal_handlers
           ]
 
 main :: IO ()
-main = do -- run the tests...
-          c1 <- runTests False tests
+main = do
+  thread1 <- newEmptyMVar
+  thread2 <- newEmptyMVar
+  let thread :: Int -> IO ()
+      thread i = do
+        let threadName = "Thread" ++ show i
+        let prefix = threadName ++ "_"
+        say $ Text.pack threadName <> " started"
+        main2 prefix
+        say $ Text.pack threadName <> " done"
+        putMVar thread1 ()
+  _ <- forkIO $ thread 1
+  _ <- forkIO $ thread 2
+  takeMVar thread1
+  takeMVar thread2
+
+main2 :: String -> IO ()
+main2 prefix = do -- run the tests...
+          c1 <- runTests False (tests prefix)
           c2 <- runIOTests False ioTests
           -- then run again, but with sandboxing on...
-          c3 <- runTests True tests
+          c3 <- runTests True (tests prefix)
           c4 <- runIOTests True ioTests
           --
           let failures  = HUnit.errors c1 + HUnit.failures c1 +
@@ -310,7 +331,7 @@ main = do -- run the tests...
        -- `catch` (\_ -> exitWith (ExitFailure $ -1))
 
 printInterpreterError :: InterpreterError -> IO ()
-printInterpreterError = hPrint stderr
+printInterpreterError = say . Text.pack . show
 
 setSandbox :: Interpreter ()
 setSandbox = set [installedModulesInScope := False]
@@ -323,9 +344,9 @@ m_a @@?= b = do a <- m_a; liftIO (a @?= b)
 
 fails :: (MonadCatch m, MonadIO m) => m a -> m Bool
 fails action = (action >> return False) `catchIE` (\_ -> return True)
-  where
-    catchIE :: MonadCatch m => m a -> (InterpreterError -> m a) -> m a
-    catchIE = MC.catch
+
+catchIE :: MonadCatch m => m a -> (InterpreterError -> m a) -> m a
+catchIE = MC.catch
 
 succeeds :: (MonadCatch m, MonadIO m) => m a -> m Bool
 succeeds = fmap not . fails
