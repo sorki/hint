@@ -315,15 +315,11 @@ main = do
 main2 :: String -> IO ()
 main2 prefix = do -- run the tests...
           c1 <- runTests False (tests prefix)
-          c2 <- runIOTests False ioTests
           -- then run again, but with sandboxing on...
           c3 <- runTests True (tests prefix)
-          c4 <- runIOTests True ioTests
           --
           let failures  = HUnit.errors c1 + HUnit.failures c1 +
-                          HUnit.errors c2 + HUnit.failures c2 +
-                          HUnit.errors c3 + HUnit.failures c3 +
-                          HUnit.errors c4 + HUnit.failures c4
+                          HUnit.errors c3 + HUnit.failures c3
               exit_code
                   | failures > 0 = ExitFailure failures
                   | otherwise    = ExitSuccess
