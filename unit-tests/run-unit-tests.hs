@@ -3,6 +3,7 @@ module Main (main) where
 
 import Say
 import Data.Traversable
+import Data.Foldable
 import qualified Data.Text as Text
 import Prelude hiding (catch)
 
@@ -301,17 +302,15 @@ main = do
       forkThread i = do
         mvar <- newEmptyMVar
         _ <- forkIO $ do
-          let threadName = "Thread" ++ show i
-          let prefix = threadName ++ "_"
-          say $ Text.pack threadName <> " started"
-          main2 prefix
-          say $ Text.pack threadName <> " done"
-          putMVar mvar ()
+          flip finally (putMVar mvar ()) $ do
+            let threadName = "Thread" ++ show i
+            let prefix = threadName ++ "_"
+            say $ Text.pack threadName <> " started"
+            main2 prefix
+            say $ Text.pack threadName <> " done"
         pure mvar
-  thread1 <- forkThread 1
-  thread2 <- forkThread 2
-  takeMVar thread1
-  takeMVar thread2
+  threads <- traverse forkThread [1..2]
+  traverse_ takeMVar threads
 
 main2 :: String -> IO ()
 main2 prefix = do -- run the tests...
