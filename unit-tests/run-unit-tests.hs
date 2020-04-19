@@ -306,10 +306,10 @@ main = do
             let threadName = "Thread" ++ show i
             let prefix = threadName ++ "_"
             say $ Text.pack threadName <> " started"
-            main2 prefix
+            runTests False [test_work_in_main prefix]
             say $ Text.pack threadName <> " done"
         pure mvar
-  threads <- traverse forkThread [1..2]
+  threads <- traverse forkThread [1..10]
   traverse_ takeMVar threads
 
 main2 :: String -> IO ()
