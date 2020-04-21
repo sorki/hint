@@ -2,6 +2,8 @@
 module Main (main) where
 
 import Say
+import Control.Concurrent.STM
+import Control.Monad
 import Data.Traversable
 import Data.Foldable
 import qualified Data.Text as Text
@@ -298,19 +300,61 @@ ioTests = [test_signal_handlers
 
 main :: IO ()
 main = do
-  let forkThread :: Int -> IO (MVar ())
-      forkThread i = do
-        mvar <- newEmptyMVar
-        _ <- forkIO $ do
-          flip finally (putMVar mvar ()) $ do
-            let threadName = "Thread" ++ show i
-            let prefix = threadName ++ "_"
-            say $ Text.pack threadName <> " started"
-            runTests False [test_work_in_main prefix]
-            say $ Text.pack threadName <> " done"
-        pure mvar
-  threads <- traverse forkThread [1..10]
-  traverse_ takeMVar threads
+  tvar <- newTVarIO 1
+  let step n = atomically $ do
+        nextStep <- readTVar tvar
+        guard (nextStep == n)
+        writeTVar tvar (n + 1)
+
+  let mod_file = "TEST_WorkInMain.hs"
+  writeFile mod_file "f = id"
+  _ <- forkIO $ do
+    step 1
+    let threadName = "Thread1"
+    let prefix = threadName ++ "_"
+    say $ Text.pack threadName <> " started"
+    r <- runInterpreter $ do
+      liftIO $ step 3
+      liftIO $ step 5
+      loadModules [mod_file]
+      liftIO $ step 7
+      setTopLevelModules ["Main"]
+      liftIO $ step 9
+      setImports ["Prelude"]
+      liftIO $ step 11
+      --
+      liftIO $ step 13
+      eval "f [1,2]" @@?= "[1,2]"
+      liftIO $ step 15
+      liftIO $ step 17
+    say $ Text.pack $ threadName ++ " " ++ show r
+    say $ Text.pack threadName <> " done"
+    step 19
+  _ <- forkIO $ do
+    step 2
+    let threadName = "Thread2"
+    let prefix = threadName ++ "_"
+    say $ Text.pack threadName <> " started"
+    r <- runInterpreter $ do
+      liftIO $ step 4
+      liftIO $ step 6
+      loadModules [mod_file]
+      liftIO $ step 8
+      setTopLevelModules ["Main"]
+      liftIO $ step 10
+      setImports ["Prelude"]
+      liftIO $ step 12
+      --
+      liftIO $ step 14
+      eval "f [1,2]" @@?= "[1,2]"
+      liftIO $ step 16
+      liftIO $ step 18
+    say $ Text.pack $ threadName ++ " " ++ show r
+
+    --runTests False [test_work_in_main prefix]
+    say $ Text.pack threadName <> " done"
+    step 20
+  step 21
 
 main2 :: String -> IO ()
 main2 prefix = do -- run the tests...
