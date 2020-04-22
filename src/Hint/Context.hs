@@ -18,7 +18,7 @@ import Data.List
 
 import Control.Arrow ((***))
 
-import Control.Monad       (filterM, unless, guard, foldM, (>=>))
+import Control.Monad (filterM, unless, guard, foldM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Catch
 
@@ -82,7 +82,9 @@ allModulesInContext :: MonadInterpreter m => m ([ModuleName], [ModuleName])
 allModulesInContext = runGhc getContextNames
 
 getContext :: GHC.GhcMonad m => m ([GHC.Module], [GHC.ImportDecl GHC.GhcPs])
-getContext = GHC.getContext >>= foldM f ([], [])
+getContext = do
+    ctx <- GHC.getContext
+    foldM f ([], []) ctx
   where
     f :: (GHC.GhcMonad m) =>
          ([GHC.Module], [GHC.ImportDecl GHC.GhcPs]) ->
@@ -145,7 +147,7 @@ addPhantomModule mod_text =
        --
        return pm
 
-removePhantomModule :: MonadInterpreter m => PhantomModule -> m ()
+removePhantomModule :: forall m. MonadInterpreter m => PhantomModule -> m ()
 removePhantomModule pm =
     do -- We don't want to actually unload this module, because that
        -- would mean that all the real modules might get reloaded and the
@@ -164,8 +166,9 @@ removePhantomModule pm =
                      let mods' = filter (mod /=) mods
                      runGhc2 setContext mods' imps
                      --
-                     let isNotPhantom = isPhantomModule . moduleToString  >=>
-                                          return . not
+                     let isNotPhantom :: GHC.Module -> m Bool
+                         isNotPhantom mod' = do
+                           not <$> isPhantomModule (moduleToString mod')
                      null <$> filterM isNotPhantom mods'
              else return True
        --
@@ -231,7 +234,9 @@ doLoad fs = mayFail $ do
 
 -- | Returns True if the module was interpreted.
 isModuleInterpreted :: MonadInterpreter m => ModuleName -> m Bool
-isModuleInterpreted m = findModule m >>= runGhc1 GHC.moduleIsInterpreted
+isModuleInterpreted moduleName = do
+  mod <- findModule moduleName
+  runGhc1 GHC.moduleIsInterpreted mod
 
 -- | Returns the list of modules loaded with 'loadModules'.
 getLoadedModules :: MonadInterpreter m => m [ModuleName]
@@ -243,9 +248,10 @@ modNameFromSummary :: GHC.ModSummary -> ModuleName
 modNameFromSummary = moduleToString . GHC.ms_mod
 
 getLoadedModSummaries :: MonadInterpreter m => m [GHC.ModSummary]
-getLoadedModSummaries =
-    runGhc GHC.getModuleGraph >>=
-    filterM (runGhc1 GHC.isLoaded . GHC.ms_mod_name) . GHC.mgModSummaries
+getLoadedModSummaries = do
+    modGraph <- runGhc GHC.getModuleGraph
+    let modSummaries = GHC.mgModSummaries modGraph
+    filterM (runGhc1 GHC.isLoaded . GHC.ms_mod_name) modSummaries
 
 -- | Sets the modules whose context is used during evaluation. All bindings
 --   of these modules are in scope, not only those exported.
@@ -297,32 +303,41 @@ setImportsQ ms = setImportsF $ map (\(m,q) -> ModuleImport m (maybe NotQualified
 --   @setImportsF [ModuleImport "Prelude" NotQualified NoImportList, ModuleImport "Data.Text" (QualifiedAs $ Just "Text") (HidingList ["pack"])]@
 
 setImportsF :: MonadInterpreter m => [ModuleImport] -> m ()
-setImportsF ms = do
+setImportsF moduleImports = do
        regularMods <- mapM (findModule . modName) regularImports
        mapM_ (findModule . modName) phantomImports -- just to be sure they exist
        --
        old_qual_hack_mod <- fromState importQualHackMod
        maybe (return ()) removePhantomModule old_qual_hack_mod
        --
-       new_pm <- if null phantomImports
-                   then return Nothing
-                   else do
-                     new_pm <- addPhantomModule $ \mod_name -> unlines $
-                                ("module " ++ mod_name ++ " where ") :
-                                map newImportLine phantomImports
-                     onState (\s -> s{importQualHackMod = Just new_pm})
-                     return $ Just new_pm
+       maybe_phantom_module <- do
+         if null phantomImports
+           then return Nothing
+           else do
+             let moduleContents = map newImportLine phantomImports
+             new_phantom_module <- addPhantomModule $ \mod_name
+               -> unlines $ ("module " ++ mod_name ++ " where ")
+                          : moduleContents
+             onState (\s -> s{importQualHackMod = Just new_phantom_module})
+             return $ Just new_phantom_module
        --
-       pm <- maybe (return []) (findModule . pmName >=> return . return) new_pm
+       phantom_mods <- case maybe_phantom_module of
+         Nothing -> do
+           pure []
+         Just phantom_module-> do
+           phantom_mod <- findModule (pmName phantom_module)
+           pure [phantom_mod]
        (old_top_level, _) <- runGhc getContext
-       let new_top_level = pm ++ old_top_level
+       let new_top_level = phantom_mods ++ old_top_level
        runGhc2 setContextModules new_top_level regularMods
        --
        onState (\s ->s{qualImports = phantomImports})
   where
-    (regularImports, phantomImports) = partitionEithers $ map (\m -> if isQualified m || hasImportList m
-                                                                       then Right m
-                                                                       else Left m) ms
+    (regularImports, phantomImports) = partitionEithers
+                                     $ map (\m -> if isQualified m || hasImportList m
+                                                  then Right m  -- phantom
+                                                  else Left m)
+                                           moduleImports
     isQualified m = modQual m /= NotQualified
     hasImportList m = modImp m /= NoImportList
     newImportLine m = concat ["import ", case modQual m of

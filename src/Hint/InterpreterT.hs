@@ -91,7 +91,9 @@ initialize args =
        -- available; calling this function once is mandatory!
        _ <- runGhc1 GHC.setSessionDynFlags df2{GHC.log_action = log_handler}
 
-       let extMap      = liftA2 (,) GHC.flagSpecName GHC.flagSpecFlag <$> GHC.xFlags
+       let extMap      = [ (GHC.flagSpecName flagSpec, GHC.flagSpecFlag flagSpec)
+                         | flagSpec <- GHC.xFlags
+                         ]
        let toOpt e     = let err = error ("init error: unknown ext:" ++ show e)
                          in fromMaybe err (lookup e extMap)
        let getOptVal e = (asExtension e, GHC.xopt (toOpt e) df2)
@@ -163,7 +165,7 @@ initialState = St {
                    hintSupportModule = error "No support module loaded!",
                    importQualHackMod = Nothing,
                    qualImports       = [],
-                   defaultExts       = [],
+                   defaultExts       = error "defaultExts missing!",
                    configuration     = defaultConf
                   }
 

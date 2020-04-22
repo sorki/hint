@@ -151,7 +151,9 @@ runGhc2 f a = runGhc1 (f a)
 -- ================ Handling the interpreter state =================
 
 fromState :: MonadInterpreter m => (InterpreterState -> a) -> m a
-fromState f = fromSession internalState >>= liftIO . fmap f . readIORef
+fromState f = do
+  ref_st <- fromSession internalState
+  liftIO $ f <$> readIORef ref_st
 
 onState :: MonadInterpreter m => (InterpreterState -> InterpreterState) -> m ()
 onState f = () <$ modifySessionRef internalState f
@@ -200,4 +202,6 @@ moduleIsLoaded mn = (True <$ findModule mn)
                                       _             -> throwM e)
 
 withDynFlags :: MonadInterpreter m => (GHC.DynFlags -> m a) -> m a
-withDynFlags = (runGhc GHC.getSessionDynFlags >>=)
+withDynFlags action = do
+  df <- runGhc GHC.getSessionDynFlags
+  action df

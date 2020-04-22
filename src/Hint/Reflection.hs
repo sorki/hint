@@ -49,7 +49,7 @@ asModElemList df xs = concat [
                | GHC.ATyCon tc <- xs, Nothing <- [GHC.tyConClass_maybe tc]]
           ds = [Fun $ getUnqualName df dc | GHC.AConLike (GHC.RealDataCon dc) <- xs]
           fs = [Fun $ getUnqualName df f  | GHC.AnId f                        <- xs]
-          alsoIn = flip elem . fmap name
+          alsoIn es = (`elem` map name es)
 
 getUnqualName :: GHC.NamedThing a => GHC.DynFlags -> a -> String
 getUnqualName dfs = GHC.showSDocUnqual dfs . GHC.pprParenSymName

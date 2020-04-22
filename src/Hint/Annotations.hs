@@ -3,11 +3,10 @@ module Hint.Annotations (
     getValAnnotations
 ) where
 
-import Control.Arrow ((<<<))
-import Control.Monad ((<=<))
 import Data.Data
 import Annotations
 import GHC.Serialized
+import MonadUtils (concatMapM)
 
 import Hint.Base
 import HscTypes (hsc_mod_graph, ms_mod)
@@ -18,12 +17,13 @@ getModuleAnnotations :: (Data a, MonadInterpreter m) => a -> String -> m [a]
 getModuleAnnotations _ x = do
     mods <- GHC.mgModSummaries . hsc_mod_graph <$> runGhc GHC.getSession
     let x' = filter ((==) x . GHC.moduleNameString . GHC.moduleName . ms_mod) mods
-    concat <$> traverse (anns . ModuleTarget . ms_mod) x'
+    concatMapM (anns . ModuleTarget . ms_mod) x'
 
 -- Get the annotations associated with a particular function.
 getValAnnotations :: (Data a, MonadInterpreter m) => a -> String -> m [a]
-getValAnnotations _ =
-    fmap concat <<< traverse (anns . NamedTarget) <=< runGhc1 GHC.parseName
+getValAnnotations _ s = do
+    names <- runGhc1 GHC.parseName s
+    concatMapM (anns . NamedTarget) names
 
 anns :: (MonadInterpreter m, Data a) => AnnTarget GHC.Name -> m [a]
 anns = runGhc1 (GHC.findGlobalAnns deserializeWithData)

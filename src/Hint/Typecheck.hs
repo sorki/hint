@@ -18,7 +18,8 @@ typeOf expr =
        -- kind of errors
        failOnParseError parseExpr expr
        --
-       mayFail (runGhc1 exprType expr) >>= typeToString
+       type_ <- mayFail (runGhc1 exprType expr)
+       typeToString type_
 
 -- | Tests if the expression type checks.
 --
