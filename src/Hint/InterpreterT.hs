@@ -128,13 +128,16 @@ runInterpreterWithArgsLibdir :: (MonadIO m, MonadMask m)
                              -> InterpreterT m a
                              -> m (Either InterpreterError a)
 runInterpreterWithArgsLibdir args libdir action =
+#ifndef THREAD_SAFE_LINKER
   ifInterpreterNotRunning $
+#endif
     do s <- newInterpreterSession `MC.catch` rethrowGhcException
        execute libdir s (initialize args >> action `finally` cleanSession)
     where rethrowGhcException   = throwM . GhcException . showGhcEx
           newInterpreterSession = newSessionData ()
           cleanSession = cleanPhantomModules
 
+#ifndef THREAD_SAFE_LINKER
 {-# NOINLINE uniqueToken #-}
 uniqueToken :: MVar ()
 uniqueToken = unsafePerformIO $ newMVar ()
@@ -143,6 +146,7 @@ ifInterpreterNotRunning :: (MonadIO m, MonadMask m) => m a -> m a
 ifInterpreterNotRunning action = liftIO (tryTakeMVar uniqueToken) >>= \ case
     Nothing -> throwM MultipleInstancesNotAllowed
     Just x  -> action `finally` liftIO (putMVar uniqueToken x)
+#endif
 
 -- | The installed version of ghc is not thread-safe. This exception
 --   is thrown whenever you try to execute @runInterpreter@ while another
@@ -159,9 +163,7 @@ initialState :: InterpreterState
 initialState = St {
                    activePhantoms    = [],
                    zombiePhantoms    = [],
-#if defined(NEED_PHANTOM_DIRECTORY)
                    phantomDirectory  = Nothing,
-#endif
                    hintSupportModule = error "No support module loaded!",
                    importQualHackMod = Nothing,
                    qualImports       = [],

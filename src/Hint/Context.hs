@@ -32,11 +32,9 @@ import System.Random
 import System.FilePath
 import System.Directory
 
-#if defined(NEED_PHANTOM_DIRECTORY)
 import Data.Maybe (maybe)
 import Hint.Configuration (setGhcOption)
 import System.IO.Temp
-#endif
 
 type ModuleText = String
 
@@ -62,7 +60,6 @@ newPhantomModule =
 
 getPhantomDirectory :: MonadInterpreter m => m FilePath
 getPhantomDirectory =
-#if defined(NEED_PHANTOM_DIRECTORY)
     -- When a module is loaded by file name, ghc-8.4.1 loses track of the
     -- file location after the first time it has been loaded, so we create
     -- a directory for the phantom modules and add it to the search path.
@@ -74,9 +71,6 @@ getPhantomDirectory =
                          onState (\s -> s{ phantomDirectory = Just fp })
                          setGhcOption $ "-i" ++ fp
                          return fp
-#else
-    liftIO getTemporaryDirectory
-#endif
 
 allModulesInContext :: MonadInterpreter m => m ([ModuleName], [ModuleName])
 allModulesInContext = runGhc getContextNames
@@ -377,11 +371,10 @@ cleanPhantomModules =
                         importQualHackMod = Nothing,
                         qualImports         = []})
        liftIO $ mapM_ (removeFile . pmFile) (old_active ++ old_zombie)
-#if defined(NEED_PHANTOM_DIRECTORY)
+
        old_phantomdir <- fromState phantomDirectory
        onState (\s -> s{phantomDirectory    = Nothing})
        liftIO $ do maybe (return ()) removeDirectory old_phantomdir
-#endif
 
 -- | All imported modules are cleared from the context, and
 --   loaded modules are unloaded. It is similar to a @:load@ in
