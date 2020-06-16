@@ -14,7 +14,7 @@ category:     Language, Compilers/Interpreters
 license:      BSD3
 license-file: LICENSE
 author:       The Hint Authors
-maintainer:   mvdan@mvdan.cc
+maintainer:   "Samuel Gélineau" <gelisam@gmail.com>
 homepage:     https://github.com/haskell-hint/hint
 
 cabal-version: >= 1.9.2
