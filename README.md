@@ -17,7 +17,7 @@ It is, essentially, a huge subset of the GHC API wrapped in a simpler API.
 ## Limitations
 
 It is possible to run the interpreter inside a thread, but on GHC 8.8 and
-below, you can't run two instances of the interpreter simlutaneously.
+below, you can't run two instances of the interpreter simultaneously.
 
 GHC must be installed on the system on which the compiled executable is running.
 
