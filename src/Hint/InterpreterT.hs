@@ -182,6 +182,17 @@ newSessionData a =
          ghcErrLogger    = mkLogHandler ghc_err_list_ref
        }
 
+#if MIN_VERSION_ghc(9,0,0)
+mkLogHandler :: IORef [GhcError] -> GhcErrLogger
+mkLogHandler r df _ _ src msg =
+    let renderErrMsg = GHC.showSDoc df
+        errorEntry = mkGhcError renderErrMsg src msg
+    in modifyIORef r (errorEntry :)
+
+mkGhcError :: (GHC.SDoc -> String) -> GHC.SrcSpan -> GHC.Message -> GhcError
+mkGhcError render src_span msg = GhcError{errMsg = niceErrMsg}
+    where niceErrMsg = render $ GHC.mkLocMessage GHC.SevError src_span msg
+#else
 mkLogHandler :: IORef [GhcError] -> GhcErrLogger
 mkLogHandler r df _ _ src style msg =
     let renderErrMsg = GHC.showSDoc df
@@ -192,6 +203,7 @@ mkGhcError :: (GHC.SDoc -> String) -> GHC.SrcSpan -> GHC.PprStyle -> GHC.Message
 mkGhcError render src_span style msg = GhcError{errMsg = niceErrMsg}
     where niceErrMsg = render . GHC.withPprStyle style $
                          GHC.mkLocMessage GHC.SevError src_span msg
+#endif
 
 -- The MonadInterpreter instance
 

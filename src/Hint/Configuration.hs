@@ -70,7 +70,7 @@ set = mapM_ $ \(opt := val) -> _set opt val
 
 -- | Retrieves the value of an option.
 get :: MonadInterpreter m => Option m a -> m a
-get = _get
+get = \o -> _get o
 
 -- | Language extensions in use by the interpreter.
 --

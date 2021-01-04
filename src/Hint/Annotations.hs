@@ -4,13 +4,20 @@ module Hint.Annotations (
 ) where
 
 import Data.Data
-import Annotations
 import GHC.Serialized
-import MonadUtils (concatMapM)
 
 import Hint.Base
-import HscTypes (hsc_mod_graph, ms_mod)
 import qualified Hint.GHC as GHC
+
+#if MIN_VERSION_ghc(9,0,0)
+import GHC.Driver.Types (hsc_mod_graph, ms_mod)
+import GHC.Types.Annotations
+import GHC.Utils.Monad (concatMapM)
+#else
+import Annotations
+import HscTypes (hsc_mod_graph, ms_mod)
+import MonadUtils (concatMapM)
+#endif
 
 -- Get the annotations associated with a particular module.
 getModuleAnnotations :: (Data a, MonadInterpreter m) => a -> String -> m [a]
