@@ -54,12 +54,16 @@ failOnParseError parser expr = mayFail go
                              logger <- fromSession ghcErrLogger
                              dflags <- runGhc GHC.getSessionDynFlags
                              let logger'  = logger dflags
+#if !MIN_VERSION_ghc(9,0,0)
                                  errStyle = GHC.defaultErrStyle dflags
+#endif
                              liftIO $ logger'
                                               GHC.NoReason
                                               GHC.SevError
                                               span
+#if !MIN_VERSION_ghc(9,0,0)
                                               errStyle
+#endif
                                               err
                              --
                              -- behave like the rest of the GHC API functions
