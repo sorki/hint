@@ -1,7 +1,4 @@
-# hint
-
-[![Build Status](https://travis-ci.com/haskell-hint/hint.svg?branch=master)](https://travis-ci.com/haskell-hint/hint)
-[![Hackage](https://img.shields.io/hackage/v/hint.svg)](https://hackage.haskell.org/package/hint)
+# hint [![Hackage](https://img.shields.io/hackage/v/hint.svg)](https://hackage.haskell.org/package/hint) [![Build Status](https://github.com/gelisam/hint/workflows/CI/badge.svg)](https://github.com/gelisam/hint/actions)
 
 This library defines an Interpreter monad within which you can interpret
 strings like `"[1,2] ++ [3]"` into values like `[1,2,3]`. You can easily
