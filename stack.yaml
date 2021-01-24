@@ -1,5 +1,1 @@
-resolver: lts-13.18
-packages:
-- .
-extra-deps:
-- exceptions-0.10.0
+stack-8.8.2.yaml
