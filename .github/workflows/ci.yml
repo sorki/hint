@@ -67,7 +67,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - ghc: latest
+          # TODO: switch to "latest" once ghc-paths bumps its upper bound on
+          # Cabal and we can build with ghc-9.0.1
+          - ghc: 8.10.3
             os: ubuntu-latest
 
     steps:
