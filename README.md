@@ -18,10 +18,6 @@ below, you can't run two instances of the interpreter simultaneously.
 
 GHC must be installed on the system on which the compiled executable is running.
 
-Compatibility is kept to the three last major GHC releases: GHC 8.10, 8.8 and
-8.6. When the next GHC release comes out and hint is adapted to work with it,
-we will drop support for GHC 8.6.
-
 ## Example
 
     {-# LANGUAGE LambdaCase, ScopedTypeVariables, TypeApplications #-}
