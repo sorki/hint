@@ -23,8 +23,9 @@ jobs:
       matrix:
         stack_yaml:
           - stack-8.6.5.yaml
-          - stack-8.8.2.yaml
-          - stack-8.10.3.yaml
+          - stack-8.8.4.yaml
+          - stack-8.10.4.yaml
+          - stack-9.0.1.yaml
         os:
           - ubuntu-latest
 
