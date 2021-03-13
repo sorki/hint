@@ -1,4 +1,4 @@
-### next version
+### 0.9.0.4
 
 * Support GHC 9.0.1
 
