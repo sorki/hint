@@ -1,0 +1,59 @@
+name: Readme
+
+on:
+  # Run once a month, to detect build failures reported on matrix.hackage.haskell.org
+  schedule:
+    - cron: '0 0 1 * *'
+
+  # To test this GitHub Action, uncomment this block and open a PR; then comment
+  # it out again before merging the PR.
+  #pull_request:
+  #  types: [opened, synchronize]
+
+jobs:
+  readme:
+    name: Run code from README.md
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - uses: actions/cache@v2
+      name: Cache Stack Artifacts
+      with:
+        path: |
+          ~/.stack
+          .stack-work
+        key: ${{ runner.os }}-stack-${{ hashFiles('stack-8.10.4.yaml') }}
+
+    - uses: haskell/actions/setup@v1
+      id: setup-haskell-stack
+      name: Setup Stack
+      with:
+        enable-stack: true
+        stack-setup-ghc: true
+        stack-no-global: true
+
+    - name: Extract and run code
+      run: |
+        TEST_FILE="TEST_Readme.hs"
+        README="$(cat README.md)"
+        CODE="$(echo "$README" | grep '^    ' | sed 's/^    //g')"
+
+        echo "module T where" > "$TEST_FILE"
+        echo "$CODE" >> "$TEST_FILE"
+
+        # {-# LANGUAGE LambdaCase, ScopedTypeVariables #-}
+        EXTS_LINE="$(echo "$CODE" | head -n 1)"
+
+        # LambdaCase
+        # ScopedTypeVariables
+        EXTS="$(echo "$EXTS_LINE" | tr ' ' '\n' | grep -v '#' | grep -v "LANGUAGE" | tr -d ',')"
+
+        # -XLambdaCase
+        # -XScopedTypeVariables
+        DOCTEST_FLAGS="$(echo "$EXTS" | sed 's/^/-X/g')"
+
+
+        stack --stack-yaml="stack-8.10.4.yaml" install doctest
+        stack exec -- doctest $DOCTEST_FLAGS $TEST_FILE
