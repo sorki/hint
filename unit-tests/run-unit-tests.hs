@@ -12,7 +12,6 @@ import Control.Concurrent.MVar
 import Control.Concurrent.STM
 
 import Data.IORef
-import Data.List (isPrefixOf, (\\))
 
 import System.IO
 import System.FilePath
@@ -23,7 +22,6 @@ import System.Exit
 import System.Posix.Signals
 #endif
 
-import Test.DocTest
 import Test.HUnit ((@?=), (@?), assertFailure)
 import qualified Test.HUnit as HUnit
 
@@ -290,23 +288,6 @@ test_normalize_type = TestCase "normalize_type" [mod_file] $ do
                              ,"type instance Foo x = ()"]
           mod_file = "TEST_NormalizeType.hs"
 
--- Make sure the example in the README doesn't fall out of sync with the
--- library's evolving API.
-test_readme :: TestCase
-test_readme = TestCase "readme" [mod_file] $ do
-        s <- liftIO $ readFile "README.md"
-        let all_lines = lines s
-            indented_lines = filter ("    " `isPrefixOf`) all_lines
-            code_lines = fmap (drop 4) indented_lines
-            language_exts_line = head code_lines
-            language_exts = fmap (filter (/= ','))
-                          $ words language_exts_line \\ ["{-#", "LANGUAGE", "#-}"]
-            doctest_flags = fmap ("-X" ++) language_exts
-            mod_text = unlines ("module T where" : code_lines)
-        liftIO $ writeFile mod_file mod_text
-        liftIO $ doctest (doctest_flags ++ [mod_file])
-    where mod_file = "TEST_Readme.hs"
-
 -- earlier versions of hint were accidentally overwriting the signal handlers
 -- for ^C and others.
 --
@@ -369,7 +350,6 @@ tests = [test_reload_modified
         ,test_multiple_instances
 #endif
         ,test_normalize_type
-        ,test_readme
         ]
 
 ioTests :: [IOTestCase]
