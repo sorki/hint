@@ -40,6 +40,7 @@ test-suite unit-tests
                   hint,
                   HUnit,
                   directory,
+                  doctest,
                   filepath,
                   exceptions >= 0.10.0,
                   stm,
