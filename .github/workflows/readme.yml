@@ -1,4 +1,4 @@
-name: Check Hackage Matrix
+name: Readme
 
 on:
   # Run once a month, to detect build failures reported on matrix.hackage.haskell.org
@@ -7,8 +7,8 @@ on:
 
   # To test this GitHub Action, uncomment this block and open a PR; then comment
   # it out again before merging the PR.
-  pull_request:
-    types: [opened, synchronize]
+  #pull_request:
+  #  types: [opened, synchronize]
 
 jobs:
   readme:
