@@ -27,7 +27,7 @@ jobs:
           - stack-8.10.4.yaml
           - stack-9.0.1.yaml
         os:
-          - ubuntu-latest
+          - windows-latest
 
     steps:
     - uses: actions/checkout@v2
@@ -69,7 +69,7 @@ jobs:
       matrix:
         include:
           - ghc: latest
-            os: ubuntu-latest
+            os: windows-latest
 
     steps:
     - uses: actions/checkout@v2
