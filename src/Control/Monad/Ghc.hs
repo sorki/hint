@@ -14,6 +14,9 @@ import Control.Monad.Catch
 import Data.IORef
 
 import qualified GHC
+#if MIN_VERSION_ghc(9,2,0)
+import qualified GHC.Utils.Logger as GHC
+#endif
 #if MIN_VERSION_ghc(9,0,0)
 import qualified GHC.Utils.Monad as GHC
 import qualified GHC.Utils.Exception as GHC
@@ -91,6 +94,11 @@ instance (MonadIO m, MonadMask m) => MonadMask (GhcT m) where
 instance (MonadIO m, MonadCatch m, MonadMask m) => GHC.ExceptionMonad (GhcT m) where
     gcatch = catch
     gmask  = mask
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+instance MonadIO m => GHC.HasLogger (GhcT m) where
+    getLogger = GhcT GHC.getLogger
 #endif
 
 instance (Functor m, MonadIO m, MonadCatch m, MonadMask m) => GHC.GhcMonad (GhcT m) where
