@@ -42,7 +42,7 @@ import GHC.Types.TyThing.Ppr as X (pprTypeForUser)
 #elif MIN_VERSION_ghc(9,0,0)
 import GHC.Driver.Types as X (SourceError, srcErrorMessages, GhcApiError)
 
-import GHC.Utils.Outputable as X (showSDoc, showSDocUnqual)
+import GHC.Utils.Outputable as X (showSDoc)
 
 import GHC.Driver.Phases as X (HscSource(HsSrcFile))
 
@@ -53,7 +53,7 @@ import GHC.Core.Ppr.TyThing as X (pprTypeForUser)
 #else
 import HscTypes as X (SourceError, srcErrorMessages, GhcApiError)
 
-import Outputable as X (showSDoc, showSDocUnqual)
+import Outputable as X (showSDoc)
 
 import DriverPhases as X (HscSource(HsSrcFile))
 

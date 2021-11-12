@@ -52,4 +52,4 @@ asModElemList df xs = concat [
           alsoIn es = (`elem` map name es)
 
 getUnqualName :: GHC.NamedThing a => GHC.DynFlags -> a -> String
-getUnqualName dfs = GHC.showSDocUnqual dfs . GHC.pprParenSymName
+getUnqualName dfs = GHC.showSDoc dfs . GHC.pprParenSymName
