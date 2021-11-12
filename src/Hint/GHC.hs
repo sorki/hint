@@ -16,6 +16,7 @@ module Hint.GHC (
     getErrorMessages,
     pprErrorMessages,
     addWay,
+    setBackendToInterpreter,
     -- * Re-exports
     module X,
 ) where
@@ -291,4 +292,12 @@ addWay way df =
     }
 #else
 addWay = GHC.addWay'
+#endif
+
+-- setBackendToInterpreter
+setBackendToInterpreter :: DynFlags -> DynFlags
+#if MIN_VERSION_ghc(9,2,0)
+setBackendToInterpreter df = df{backend = Interpreter}
+#else
+setBackendToInterpreter df = df{hscTarget = HscInterpreted}
 #endif
