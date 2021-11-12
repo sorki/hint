@@ -15,6 +15,9 @@ module Hint.GHC (
     initParserState,
     getErrorMessages,
     pprErrorMessages,
+    SDocContext,
+    defaultSDocContext,
+    showGhcException,
     addWay,
     setBackendToInterpreter,
     parseDynamicFlags,
@@ -22,7 +25,7 @@ module Hint.GHC (
     module X,
 ) where
 
-import GHC as X hiding (Phase, GhcT, parseDynamicFlags, runGhcT
+import GHC as X hiding (Phase, GhcT, parseDynamicFlags, runGhcT, showGhcException
 #if MIN_VERSION_ghc(9,2,0)
                        , Logger
                        , modifyLogger
@@ -132,6 +135,10 @@ import qualified GHC.Parser.Lexer as GHC (getErrorMessages)
 import qualified GHC.Types.Error as GHC (ErrorMessages, errMsgDiagnostic, unDecorated)
 import GHC.Data.Bag (bagToList)
 
+-- showGhcException
+import qualified GHC (showGhcException)
+import qualified GHC.Utils.Outputable as GHC (SDocContext, defaultSDocContext)
+
 -- addWay
 import qualified GHC.Driver.Session as DynFlags (targetWays_)
 import qualified Data.Set as Set
@@ -160,6 +167,9 @@ import GHC.Data.StringBuffer (StringBuffer)
 -- ErrorMessages
 import qualified GHC.Utils.Error as GHC (ErrorMessages, pprErrMsgBagWithLoc)
 import qualified GHC.Parser.Lexer as GHC (getErrorMessages)
+
+-- showGhcException
+import qualified GHC (showGhcException)
 
 -- addWay
 import qualified GHC.Driver.Session as GHC (addWay')
@@ -192,6 +202,9 @@ import qualified Lexer as GHC (getErrorMessages)
 #else
 import Bag (emptyBag)
 #endif
+
+-- showGhcException
+import qualified GHC (showGhcException)
 
 -- addWay
 import qualified DynFlags as GHC (addWay')
@@ -296,6 +309,24 @@ pprErrorMessages = GHC.pprErrMsgBagWithLoc
 #else
 getErrorMessages _ _ = emptyBag
 pprErrorMessages = GHC.pprErrMsgBagWithLoc
+#endif
+
+-- SDocContext
+defaultSDocContext :: SDocContext
+#if MIN_VERSION_ghc(9,2,0)
+type SDocContext = GHC.SDocContext
+defaultSDocContext = GHC.defaultSDocContext
+#else
+type SDocContext = ()
+defaultSDocContext = ()
+#endif
+
+-- showGhcException
+showGhcException :: SDocContext -> GhcException -> ShowS
+#if MIN_VERSION_ghc(9,2,0)
+showGhcException = GHC.showGhcException
+#else
+showGhcException _ = GHC.showGhcException
 #endif
 
 -- addWay

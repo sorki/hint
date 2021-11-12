@@ -68,7 +68,7 @@ runGhcImpl a =
       . GHC.srcErrorMessages
 
 showGhcEx :: GHC.GhcException -> String
-showGhcEx = flip GHC.showGhcException ""
+showGhcEx = flip (GHC.showGhcException GHC.defaultSDocContext) ""
 
 -- ================= Executing the interpreter ==================
 
