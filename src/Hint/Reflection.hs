@@ -30,8 +30,8 @@ children (Data  _ dcs) = dcs
 getModuleExports :: MonadInterpreter m => ModuleName -> m [ModuleElem]
 getModuleExports mn =
     do module_  <- findModule mn
-       mod_info <- mayFail $ runGhc1 GHC.getModuleInfo module_
-       exports  <- mapM (runGhc1 GHC.lookupName) (GHC.modInfoExports mod_info)
+       mod_info <- mayFail $ runGhc $ GHC.getModuleInfo module_
+       exports  <- mapM (\n -> runGhc $ GHC.lookupName n) (GHC.modInfoExports mod_info)
        dflags   <- runGhc GHC.getSessionDynFlags
        --
        return $ asModElemList dflags (catMaybes exports)

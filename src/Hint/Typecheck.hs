@@ -18,7 +18,7 @@ typeOf expr =
        -- kind of errors
        failOnParseError parseExpr expr
        --
-       type_ <- mayFail (runGhc1 exprType expr)
+       type_ <- mayFail (runGhc $ exprType expr)
        typeToString type_
 
 -- | Tests if the expression type checks.
@@ -45,7 +45,7 @@ kindOf type_expr =
        -- kind of errors
        failOnParseError parseType type_expr
        --
-       (_, kind) <- mayFail $ runGhc1 typeKind type_expr
+       (_, kind) <- mayFail $ runGhc $ typeKind type_expr
        --
        kindToString kind
 
@@ -58,7 +58,7 @@ normalizeType type_expr =
        -- kind of errors
        failOnParseError parseType type_expr
        --
-       (ty, _) <- mayFail $ runGhc1 typeKind type_expr
+       (ty, _) <- mayFail $ runGhc $ typeKind type_expr
        --
        typeToString ty
 

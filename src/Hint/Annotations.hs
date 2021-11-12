@@ -29,8 +29,8 @@ getModuleAnnotations _ x = do
 -- Get the annotations associated with a particular function.
 getValAnnotations :: (Data a, MonadInterpreter m) => a -> String -> m [a]
 getValAnnotations _ s = do
-    names <- runGhc1 GHC.parseName s
+    names <- runGhc $ GHC.parseName s
     concatMapM (anns . NamedTarget) names
 
 anns :: (MonadInterpreter m, Data a) => AnnTarget GHC.Name -> m [a]
-anns = runGhc1 (GHC.findGlobalAnns deserializeWithData)
+anns target = runGhc $ GHC.findGlobalAnns deserializeWithData target

@@ -29,12 +29,12 @@ import Hint.Extension
 setGhcOptions :: MonadInterpreter m => [String] -> m ()
 setGhcOptions opts =
     do old_flags <- runGhc GHC.getSessionDynFlags
-       (new_flags,not_parsed) <- runGhc2 parseDynamicFlags old_flags opts
+       (new_flags,not_parsed) <- runGhc $ parseDynamicFlags old_flags opts
        unless (null not_parsed) $
             throwM $ UnknownError
                             $ concat ["flags: ", unwords $ map quote not_parsed,
                                                "not recognized"]
-       _ <- runGhc1 GHC.setSessionDynFlags new_flags
+       _ <- runGhc $ GHC.setSessionDynFlags new_flags
        return ()
 
 setGhcOption :: MonadInterpreter m => String -> m ()

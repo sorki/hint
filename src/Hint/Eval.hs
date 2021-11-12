@@ -41,7 +41,7 @@ unsafeInterpret expr type_str =
        failOnParseError parseExpr expr
        --
        let expr_typesig = concat [parens expr, " :: ", type_str]
-       expr_val <- mayFail $ runGhc1 compileExpr expr_typesig
+       expr_val <- mayFail $ runGhc $ compileExpr expr_typesig
        --
        return (GHC.Exts.unsafeCoerce# expr_val :: a)
 
@@ -65,7 +65,7 @@ eval expr = do in_scope_show   <- supportShow
 -- > runStmt "x <- return 42"
 -- > runStmt "print x"
 runStmt :: (MonadInterpreter m) => String -> m ()
-runStmt = mayFail . runGhc1 go
+runStmt s = mayFail $ runGhc $ go s
     where
     go statements = do
         result <- GHC.execStmt statements GHC.execOptions

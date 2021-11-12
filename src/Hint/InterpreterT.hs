@@ -81,7 +81,7 @@ initialize args =
        df0 <- runGhc GHC.getSessionDynFlags
 
        let df1 = configureDynFlags df0
-       (df2, extra) <- runGhc2 parseDynamicFlags df1 args
+       (df2, extra) <- runGhc $ parseDynamicFlags df1 args
        unless (null extra) $
             throwM $ UnknownError (concat [ "flags: '"
                                           , unwords extra
@@ -89,7 +89,7 @@ initialize args =
 
        -- Observe that, setSessionDynFlags loads info on packages
        -- available; calling this function once is mandatory!
-       _ <- runGhc1 GHC.setSessionDynFlags df2{GHC.log_action = log_handler}
+       _ <- runGhc $ GHC.setSessionDynFlags df2{GHC.log_action = log_handler}
 
        let extMap      = [ (GHC.flagSpecName flagSpec, GHC.flagSpecFlag flagSpec)
                          | flagSpec <- GHC.xFlags
