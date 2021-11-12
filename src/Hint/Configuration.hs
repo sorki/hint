@@ -137,7 +137,7 @@ onConf f = onState $ \st -> st{configuration = f (configuration st)}
 
 configureDynFlags :: GHC.DynFlags -> GHC.DynFlags
 configureDynFlags dflags =
-    (if GHC.dynamicGhc then GHC.addWay' GHC.WayDyn else id)
+    (if GHC.dynamicGhc then GHC.addWay GHC.WayDyn else id)
                            dflags{GHC.ghcMode    = GHC.CompManager,
                                   GHC.hscTarget  = GHC.HscInterpreted,
                                   GHC.ghcLink    = GHC.LinkInMemory,

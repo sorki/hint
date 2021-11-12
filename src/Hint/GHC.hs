@@ -15,6 +15,7 @@ module Hint.GHC (
     initParserState,
     getErrorMessages,
     pprErrorMessages,
+    addWay,
     -- * Re-exports
     module X,
 ) where
@@ -126,6 +127,10 @@ import qualified GHC.Parser.Errors.Ppr as GHC (pprError)
 import qualified GHC.Parser.Lexer as GHC (getErrorMessages)
 import qualified GHC.Types.Error as GHC (ErrorMessages, errMsgDiagnostic, unDecorated)
 import GHC.Data.Bag (bagToList)
+
+-- addWay
+import qualified GHC.Driver.Session as DynFlags (targetWays_)
+import qualified Data.Set as Set
 #elif MIN_VERSION_ghc(9,0,0)
 -- dynamicGhc
 import GHC.Driver.Ways (hostIsDynamic)
@@ -147,6 +152,9 @@ import GHC.Data.StringBuffer (StringBuffer)
 -- ErrorMessages
 import qualified GHC.Utils.Error as GHC (ErrorMessages, pprErrMsgBagWithLoc)
 import qualified GHC.Parser.Lexer as GHC (getErrorMessages)
+
+-- addWay
+import qualified GHC.Driver.Session as GHC (addWay')
 #else
 -- dynamicGhc
 import qualified DynFlags as GHC (dynamicGhc)
@@ -172,6 +180,9 @@ import qualified Lexer as GHC (getErrorMessages)
 #else
 import Bag (emptyBag)
 #endif
+
+-- addWay
+import qualified DynFlags as GHC (addWay')
 #endif
 
 {-------------------- Shims --------------------}
@@ -269,4 +280,15 @@ pprErrorMessages = GHC.pprErrMsgBagWithLoc
 #else
 getErrorMessages _ _ = emptyBag
 pprErrorMessages = GHC.pprErrMsgBagWithLoc
+#endif
+
+-- addWay
+addWay :: Way -> DynFlags -> DynFlags
+#if MIN_VERSION_ghc(9,2,0)
+addWay way df =
+  df
+    { targetWays_ = Set.insert way $ DynFlags.targetWays_ df
+    }
+#else
+addWay = GHC.addWay'
 #endif
