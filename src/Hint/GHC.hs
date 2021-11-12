@@ -3,11 +3,21 @@ module Hint.GHC (
     dynamicGhc,
     Message,
     Logger,
+    initLogger,
+    putLogMsg,
+    pushLogHook,
+    modifyLogger,
     -- * Re-exports
     module X,
 ) where
 
-import GHC as X hiding (Phase, GhcT, runGhcT)
+import GHC as X hiding (Phase, GhcT, runGhcT
+#if MIN_VERSION_ghc(9,2,0)
+                       , Logger
+                       , modifyLogger
+                       , pushLogHook
+#endif
+                       )
 import Control.Monad.Ghc as X (GhcT, runGhcT)
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -104,18 +114,30 @@ import ConLike as X (ConLike(RealDataCon))
 #if MIN_VERSION_ghc(9,2,0)
 -- dynamicGhc
 import GHC.Platform.Ways (hostIsDynamic)
+
+-- Logger
+import qualified GHC.Utils.Logger as GHC (Logger, initLogger, putLogMsg, pushLogHook)
+import qualified GHC.Driver.Monad as GHC (modifyLogger)
 #elif MIN_VERSION_ghc(9,0,0)
 -- dynamicGhc
 import GHC.Driver.Ways (hostIsDynamic)
 
 -- Message
 import qualified GHC.Utils.Error as GHC (MsgDoc)
+
+-- Logger
+import qualified GHC.Driver.Session as GHC (defaultLogAction)
+import qualified GHC.Driver.Session as DynFlags (log_action)
 #else
 -- dynamicGhc
 import qualified DynFlags as GHC (dynamicGhc)
 
 -- Message
 import qualified ErrUtils as GHC (MsgDoc)
+
+-- Logger
+import qualified DynFlags as GHC (defaultLogAction)
+import qualified DynFlags (log_action)
 #endif
 
 {-------------------- Shims --------------------}
@@ -136,4 +158,23 @@ type Message = GHC.MsgDoc
 #endif
 
 -- Logger
+initLogger :: IO Logger
+putLogMsg :: Logger -> LogAction
+pushLogHook :: (LogAction -> LogAction) -> Logger -> Logger
+modifyLogger :: GhcMonad m => (Logger -> Logger) -> m ()
+#if MIN_VERSION_ghc(9,2,0)
+type Logger = GHC.Logger
+initLogger = GHC.initLogger
+putLogMsg = GHC.putLogMsg
+pushLogHook = GHC.pushLogHook
+modifyLogger = GHC.modifyLogger
+#else
 type Logger = LogAction
+initLogger = pure GHC.defaultLogAction
+putLogMsg = id
+pushLogHook = id
+modifyLogger f = do
+  df <- getSessionDynFlags
+  _ <- setSessionDynFlags df{log_action = f $ DynFlags.log_action df}
+  return ()
+#endif

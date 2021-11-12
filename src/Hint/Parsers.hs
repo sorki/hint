@@ -53,7 +53,7 @@ failOnParseError parser expr = mayFail go
                              -- other errors get reported....
                              logger <- fromSession ghcLogger
                              dflags <- runGhc GHC.getSessionDynFlags
-                             let logger'  = logger dflags
+                             let logger'  = GHC.putLogMsg logger dflags
 #if !MIN_VERSION_ghc(9,0,0)
                                  errStyle = GHC.defaultErrStyle dflags
 #endif

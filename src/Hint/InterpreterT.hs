@@ -76,7 +76,9 @@ initialize :: (MonadIO m, MonadThrow m, MonadMask m, Functor m)
            => [String]
            -> InterpreterT m ()
 initialize args =
-    do log_handler <- fromSession ghcLogger
+    do logger <- fromSession ghcLogger
+       runGhc $ GHC.modifyLogger (const logger)
+
        -- Set a custom log handler, to intercept error messages :S
        df0 <- runGhc GHC.getSessionDynFlags
 
@@ -89,7 +91,7 @@ initialize args =
 
        -- Observe that, setSessionDynFlags loads info on packages
        -- available; calling this function once is mandatory!
-       _ <- runGhc $ GHC.setSessionDynFlags df2{GHC.log_action = log_handler}
+       _ <- runGhc $ GHC.setSessionDynFlags df2
 
        let extMap      = [ (GHC.flagSpecName flagSpec, GHC.flagSpecFlag flagSpec)
                          | flagSpec <- GHC.xFlags
@@ -175,20 +177,21 @@ newSessionData :: MonadIO m => a -> m (SessionData a)
 newSessionData a =
     do initial_state    <- liftIO $ newIORef initialState
        ghc_err_list_ref <- liftIO $ newIORef []
+       logger           <- liftIO $ GHC.initLogger
        return SessionData {
          internalState   = initial_state,
          versionSpecific = a,
          ghcErrListRef   = ghc_err_list_ref,
-         ghcLogger       = mkLogHandler ghc_err_list_ref
+         ghcLogger       = GHC.pushLogHook (const $ mkLogAction ghc_err_list_ref) logger
        }
 
-mkLogHandler :: IORef [GhcError] -> GHC.LogAction
-mkLogHandler r = mkLogAction $ \df _ _ src withStyle msg ->
+mkLogAction :: IORef [GhcError] -> GHC.LogAction
+mkLogAction r = mkLogAction' $ \df _ _ src withStyle msg ->
     let renderErrMsg = GHC.showSDoc df . withStyle
         errorEntry = mkGhcError renderErrMsg src msg
     in modifyIORef r (errorEntry :)
     where
-        mkLogAction f =
+        mkLogAction' f =
 #if MIN_VERSION_ghc(9,0,0)
             \df wr sev src msg -> f df wr sev src id msg
 #else
