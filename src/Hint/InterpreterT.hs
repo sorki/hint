@@ -83,7 +83,7 @@ initialize args =
        df0 <- runGhc GHC.getSessionDynFlags
 
        let df1 = configureDynFlags df0
-       (df2, extra) <- runGhc $ parseDynamicFlags df1 args
+       (df2, extra) <- runGhc $ parseDynamicFlags logger df1 args
        unless (null extra) $
             throwM $ UnknownError (concat [ "flags: '"
                                           , unwords extra

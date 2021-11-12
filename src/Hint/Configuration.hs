@@ -29,7 +29,8 @@ import Hint.Extension
 setGhcOptions :: MonadInterpreter m => [String] -> m ()
 setGhcOptions opts =
     do old_flags <- runGhc GHC.getSessionDynFlags
-       (new_flags,not_parsed) <- runGhc $ parseDynamicFlags old_flags opts
+       logger <- fromSession ghcLogger
+       (new_flags,not_parsed) <- runGhc $ parseDynamicFlags logger old_flags opts
        unless (null not_parsed) $
             throwM $ UnknownError
                             $ concat ["flags: ", unwords $ map quote not_parsed,
@@ -145,6 +146,6 @@ configureDynFlags dflags =
                                   GHC.verbosity  = 0}
 
 parseDynamicFlags :: GHC.GhcMonad m
-                  => GHC.DynFlags -> [String] -> m (GHC.DynFlags, [String])
-parseDynamicFlags d = fmap firstTwo . GHC.parseDynamicFlags d . map GHC.noLoc
+                  => GHC.Logger -> GHC.DynFlags -> [String] -> m (GHC.DynFlags, [String])
+parseDynamicFlags l d = fmap firstTwo . GHC.parseDynamicFlags l d . map GHC.noLoc
     where firstTwo (a,b,_) = (a, map GHC.unLoc b)

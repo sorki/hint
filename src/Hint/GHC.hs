@@ -17,11 +17,12 @@ module Hint.GHC (
     pprErrorMessages,
     addWay,
     setBackendToInterpreter,
+    parseDynamicFlags,
     -- * Re-exports
     module X,
 ) where
 
-import GHC as X hiding (Phase, GhcT, runGhcT
+import GHC as X hiding (Phase, GhcT, parseDynamicFlags, runGhcT
 #if MIN_VERSION_ghc(9,2,0)
                        , Logger
                        , modifyLogger
@@ -104,6 +105,8 @@ import ConLike as X (ConLike(RealDataCon))
 
 {-------------------- Imports for Shims --------------------}
 
+import Control.Monad.IO.Class (MonadIO)
+
 #if MIN_VERSION_ghc(9,2,0)
 -- dynamicGhc
 import GHC.Platform.Ways (hostIsDynamic)
@@ -132,6 +135,10 @@ import GHC.Data.Bag (bagToList)
 -- addWay
 import qualified GHC.Driver.Session as DynFlags (targetWays_)
 import qualified Data.Set as Set
+
+-- parseDynamicFlags
+import qualified GHC (parseDynamicFlags)
+import GHC.Driver.CmdLine (Warn)
 #elif MIN_VERSION_ghc(9,0,0)
 -- dynamicGhc
 import GHC.Driver.Ways (hostIsDynamic)
@@ -156,6 +163,10 @@ import qualified GHC.Parser.Lexer as GHC (getErrorMessages)
 
 -- addWay
 import qualified GHC.Driver.Session as GHC (addWay')
+
+-- parseDynamicFlags
+import qualified GHC (parseDynamicFlags)
+import GHC.Driver.CmdLine (Warn)
 #else
 -- dynamicGhc
 import qualified DynFlags as GHC (dynamicGhc)
@@ -184,6 +195,10 @@ import Bag (emptyBag)
 
 -- addWay
 import qualified DynFlags as GHC (addWay')
+
+-- parseDynamicFlags
+import qualified GHC (parseDynamicFlags)
+import CmdLineParser (Warn)
 #endif
 
 {-------------------- Shims --------------------}
@@ -300,4 +315,12 @@ setBackendToInterpreter :: DynFlags -> DynFlags
 setBackendToInterpreter df = df{backend = Interpreter}
 #else
 setBackendToInterpreter df = df{hscTarget = HscInterpreted}
+#endif
+
+-- parseDynamicFlags
+parseDynamicFlags :: MonadIO m => Logger -> DynFlags -> [Located String] -> m (DynFlags, [Located String], [Warn])
+#if MIN_VERSION_ghc(9,2,0)
+parseDynamicFlags = GHC.parseDynamicFlags
+#else
+parseDynamicFlags _ = GHC.parseDynamicFlags
 #endif
