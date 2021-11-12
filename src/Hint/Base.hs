@@ -161,7 +161,8 @@ showGHC :: (MonadInterpreter m, GHC.Outputable a) => a -> m String
 showGHC a
  = do unqual <- runGhc GHC.getPrintUnqual
       withDynFlags $ \df ->
-        return $ GHC.showSDocForUser df unqual (GHC.ppr a)
+        -- TODO: get unit state from somewhere?
+        return $ GHC.showSDocForUser df GHC.emptyUnitState unqual (GHC.ppr a)
 
 -- ================ Misc ===================================
 

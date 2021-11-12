@@ -7,6 +7,9 @@ module Hint.GHC (
     putLogMsg,
     pushLogHook,
     modifyLogger,
+    UnitState,
+    emptyUnitState,
+    showSDocForUser,
     -- * Re-exports
     module X,
 ) where
@@ -34,7 +37,7 @@ import GHC.Types.TyThing.Ppr as X (pprTypeForUser)
 #elif MIN_VERSION_ghc(9,0,0)
 import GHC.Driver.Types as X (SourceError, srcErrorMessages, GhcApiError)
 
-import GHC.Utils.Outputable as X (showSDoc, showSDocForUser, showSDocUnqual)
+import GHC.Utils.Outputable as X (showSDoc, showSDocUnqual)
 
 import GHC.Utils.Error as X (pprErrMsgBagWithLoc)
 
@@ -49,7 +52,7 @@ import GHC.Core.Ppr.TyThing as X (pprTypeForUser)
 #else
 import HscTypes as X (SourceError, srcErrorMessages, GhcApiError)
 
-import Outputable as X (showSDoc, showSDocForUser, showSDocUnqual)
+import Outputable as X (showSDoc, showSDocUnqual)
 
 import ErrUtils as X (pprErrMsgBagWithLoc)
 
@@ -118,6 +121,12 @@ import GHC.Platform.Ways (hostIsDynamic)
 -- Logger
 import qualified GHC.Utils.Logger as GHC (Logger, initLogger, putLogMsg, pushLogHook)
 import qualified GHC.Driver.Monad as GHC (modifyLogger)
+
+-- UnitState
+import qualified GHC.Unit.State as GHC (UnitState, emptyUnitState)
+
+-- showSDocForUser
+import qualified GHC.Driver.Ppr as GHC (showSDocForUser)
 #elif MIN_VERSION_ghc(9,0,0)
 -- dynamicGhc
 import GHC.Driver.Ways (hostIsDynamic)
@@ -128,6 +137,9 @@ import qualified GHC.Utils.Error as GHC (MsgDoc)
 -- Logger
 import qualified GHC.Driver.Session as GHC (defaultLogAction)
 import qualified GHC.Driver.Session as DynFlags (log_action)
+
+-- showSDocForUser
+import qualified GHC.Utils.Outputable as GHC (showSDocForUser)
 #else
 -- dynamicGhc
 import qualified DynFlags as GHC (dynamicGhc)
@@ -138,6 +150,9 @@ import qualified ErrUtils as GHC (MsgDoc)
 -- Logger
 import qualified DynFlags as GHC (defaultLogAction)
 import qualified DynFlags (log_action)
+
+-- showSDocForUser
+import qualified Outputable as GHC (showSDocForUser)
 #endif
 
 {-------------------- Shims --------------------}
@@ -177,4 +192,22 @@ modifyLogger f = do
   df <- getSessionDynFlags
   _ <- setSessionDynFlags df{log_action = f $ DynFlags.log_action df}
   return ()
+#endif
+
+-- UnitState
+emptyUnitState :: UnitState
+#if MIN_VERSION_ghc(9,2,0)
+type UnitState = GHC.UnitState
+emptyUnitState = GHC.emptyUnitState
+#else
+type UnitState = ()
+emptyUnitState = ()
+#endif
+
+-- showSDocForUser
+showSDocForUser :: DynFlags -> UnitState -> PrintUnqualified -> SDoc -> String
+#if MIN_VERSION_ghc(9,2,0)
+showSDocForUser = GHC.showSDocForUser
+#else
+showSDocForUser df _ = GHC.showSDocForUser df
 #endif
