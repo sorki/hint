@@ -51,7 +51,7 @@ failOnParseError parser expr = mayFail go
                       ParseError span err ->
                           do -- parsing failed, so we report it just as all
                              -- other errors get reported....
-                             logger <- fromSession ghcErrLogger
+                             logger <- fromSession ghcLogger
                              dflags <- runGhc GHC.getSessionDynFlags
                              let logger'  = logger dflags
 #if !MIN_VERSION_ghc(9,0,0)

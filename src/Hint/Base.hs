@@ -3,7 +3,7 @@ module Hint.Base (
 
     GhcError(..), InterpreterError(..), mayFail, catchIE,
 
-    InterpreterSession, SessionData(..), GhcErrLogger,
+    InterpreterSession, SessionData(..),
     InterpreterState(..), fromState, onState,
     InterpreterConfiguration(..),
     ImportList(..), ModuleQualification(..), ModuleImport(..),
@@ -101,7 +101,7 @@ data SessionData a = SessionData {
                        internalState   :: IORef InterpreterState,
                        versionSpecific :: a,
                        ghcErrListRef   :: IORef [GhcError],
-                       ghcErrLogger    :: GhcErrLogger
+                       ghcLogger       :: GHC.Logger
                      }
 
 -- When intercepting errors reported by GHC, we only get a ErrUtils.Message
@@ -124,8 +124,6 @@ mapGhcExceptions buildEx action =
 
 catchIE :: MonadInterpreter m => m a -> (InterpreterError -> m a) -> m a
 catchIE = MC.catch
-
-type GhcErrLogger = GHC.LogAction
 
 -- | Module names are _not_ filepaths.
 type ModuleName = String

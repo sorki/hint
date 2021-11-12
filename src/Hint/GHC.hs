@@ -2,6 +2,7 @@ module Hint.GHC (
     -- * Shims
     dynamicGhc,
     Message,
+    Logger,
     -- * Re-exports
     module X,
 ) where
@@ -94,3 +95,6 @@ dynamicGhc = GHC.dynamicGhc
 
 -- Message
 type Message = GHC.MsgDoc
+
+-- Logger
+type Logger = LogAction

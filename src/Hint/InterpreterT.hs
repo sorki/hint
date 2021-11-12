@@ -76,7 +76,7 @@ initialize :: (MonadIO m, MonadThrow m, MonadMask m, Functor m)
            => [String]
            -> InterpreterT m ()
 initialize args =
-    do log_handler <- fromSession ghcErrLogger
+    do log_handler <- fromSession ghcLogger
        -- Set a custom log handler, to intercept error messages :S
        df0 <- runGhc GHC.getSessionDynFlags
 
@@ -179,11 +179,11 @@ newSessionData a =
          internalState   = initial_state,
          versionSpecific = a,
          ghcErrListRef   = ghc_err_list_ref,
-         ghcErrLogger    = mkLogHandler ghc_err_list_ref
+         ghcLogger       = mkLogHandler ghc_err_list_ref
        }
 
 #if MIN_VERSION_ghc(9,0,0)
-mkLogHandler :: IORef [GhcError] -> GhcErrLogger
+mkLogHandler :: IORef [GhcError] -> GHC.Logger
 mkLogHandler r df _ _ src msg =
     let renderErrMsg = GHC.showSDoc df
         errorEntry = mkGhcError renderErrMsg src msg
@@ -193,7 +193,7 @@ mkGhcError :: (GHC.SDoc -> String) -> GHC.SrcSpan -> GHC.Message -> GhcError
 mkGhcError render src_span msg = GhcError{errMsg = niceErrMsg}
     where niceErrMsg = render $ GHC.mkLocMessage GHC.SevError src_span msg
 #else
-mkLogHandler :: IORef [GhcError] -> GhcErrLogger
+mkLogHandler :: IORef [GhcError] -> GHC.Logger
 mkLogHandler r df _ _ src style msg =
     let renderErrMsg = GHC.showSDoc df
         errorEntry = mkGhcError renderErrMsg src style msg
