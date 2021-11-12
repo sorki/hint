@@ -10,6 +10,9 @@ module Hint.GHC (
     UnitState,
     emptyUnitState,
     showSDocForUser,
+    ParserOpts,
+    mkParserOpts,
+    initParserState,
     -- * Re-exports
     module X,
 ) where
@@ -43,8 +46,6 @@ import GHC.Utils.Error as X (pprErrMsgBagWithLoc)
 
 import GHC.Driver.Phases as X (HscSource(HsSrcFile))
 
-import GHC.Parser.Lexer as X (mkPState)
-
 import GHC.Driver.Session as X (LogAction, addWay')
 import GHC.Driver.Ways as X (Way (..))
 
@@ -57,8 +58,6 @@ import Outputable as X (showSDoc, showSDocUnqual)
 import ErrUtils as X (pprErrMsgBagWithLoc)
 
 import DriverPhases as X (HscSource(HsSrcFile))
-
-import Lexer as X (mkPState)
 
 import DynFlags as X (LogAction, addWay', Way(..))
 
@@ -127,6 +126,11 @@ import qualified GHC.Unit.State as GHC (UnitState, emptyUnitState)
 
 -- showSDocForUser
 import qualified GHC.Driver.Ppr as GHC (showSDocForUser)
+
+-- PState
+import qualified GHC.Parser.Lexer as GHC (PState, ParserOpts, mkParserOpts, initParserState)
+import GHC.Data.StringBuffer (StringBuffer)
+import qualified GHC.Driver.Session as DynFlags (warningFlags, extensionFlags, safeImportsOn)
 #elif MIN_VERSION_ghc(9,0,0)
 -- dynamicGhc
 import GHC.Driver.Ways (hostIsDynamic)
@@ -140,6 +144,10 @@ import qualified GHC.Driver.Session as DynFlags (log_action)
 
 -- showSDocForUser
 import qualified GHC.Utils.Outputable as GHC (showSDocForUser)
+
+-- PState
+import qualified GHC.Parser.Lexer as GHC (PState, ParserFlags, mkParserFlags, mkPStatePure)
+import GHC.Data.StringBuffer (StringBuffer)
 #else
 -- dynamicGhc
 import qualified DynFlags as GHC (dynamicGhc)
@@ -153,6 +161,10 @@ import qualified DynFlags (log_action)
 
 -- showSDocForUser
 import qualified Outputable as GHC (showSDocForUser)
+
+-- PState
+import qualified Lexer as GHC (PState, ParserFlags, mkParserFlags, mkPStatePure)
+import StringBuffer (StringBuffer)
 #endif
 
 {-------------------- Shims --------------------}
@@ -210,4 +222,28 @@ showSDocForUser :: DynFlags -> UnitState -> PrintUnqualified -> SDoc -> String
 showSDocForUser = GHC.showSDocForUser
 #else
 showSDocForUser df _ = GHC.showSDocForUser df
+#endif
+
+-- PState
+mkParserOpts :: DynFlags -> ParserOpts
+initParserState :: ParserOpts -> StringBuffer -> RealSrcLoc -> GHC.PState
+#if MIN_VERSION_ghc(9,2,0)
+type ParserOpts = GHC.ParserOpts
+mkParserOpts =
+  -- adapted from
+  -- https://hackage.haskell.org/package/ghc-8.10.2/docs/src/Lexer.html#line-2437
+  GHC.mkParserOpts
+    <$> DynFlags.warningFlags
+    <*> DynFlags.extensionFlags
+    <*> DynFlags.safeImportsOn
+    <*> gopt Opt_Haddock
+    <*> gopt Opt_KeepRawTokenStream
+    <*> const True
+
+initParserState = GHC.initParserState
+#else
+type ParserOpts = GHC.ParserFlags
+mkParserOpts = GHC.mkParserFlags
+
+initParserState = GHC.mkPStatePure
 #endif

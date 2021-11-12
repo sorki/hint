@@ -24,7 +24,8 @@ runParser parser expr =
        --
        -- ghc >= 7 panics if noSrcLoc is given
        let srcLoc = GHC.mkRealSrcLoc (GHC.fsLit "<hint>") 1 1
-       let parse_res = GHC.unP parser (GHC.mkPState dyn_fl buf srcLoc)
+       let parserOpts = GHC.mkParserOpts dyn_fl
+       let parse_res = GHC.unP parser (GHC.initParserState parserOpts buf srcLoc)
        --
        case parse_res of
            GHC.POk{}            -> return ParseOk
