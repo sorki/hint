@@ -64,7 +64,7 @@ runGhcImpl a =
     compilationError dynFlags
       = WontCompile
       . map (GhcError . GHC.showSDoc dynFlags)
-      . GHC.pprErrMsgBagWithLoc
+      . GHC.pprErrorMessages
       . GHC.srcErrorMessages
 
 showGhcEx :: GHC.GhcException -> String

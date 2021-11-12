@@ -13,6 +13,8 @@ module Hint.GHC (
     ParserOpts,
     mkParserOpts,
     initParserState,
+    getErrorMessages,
+    pprErrorMessages,
     -- * Re-exports
     module X,
 ) where
@@ -42,8 +44,6 @@ import GHC.Driver.Types as X (SourceError, srcErrorMessages, GhcApiError)
 
 import GHC.Utils.Outputable as X (showSDoc, showSDocUnqual)
 
-import GHC.Utils.Error as X (pprErrMsgBagWithLoc)
-
 import GHC.Driver.Phases as X (HscSource(HsSrcFile))
 
 import GHC.Driver.Session as X (LogAction, addWay')
@@ -54,8 +54,6 @@ import GHC.Core.Ppr.TyThing as X (pprTypeForUser)
 import HscTypes as X (SourceError, srcErrorMessages, GhcApiError)
 
 import Outputable as X (showSDoc, showSDocUnqual)
-
-import ErrUtils as X (pprErrMsgBagWithLoc)
 
 import DriverPhases as X (HscSource(HsSrcFile))
 
@@ -72,8 +70,7 @@ import GHC.Utils.Error as X (mkLocMessage, errMsgSpan)
 
 import GHC.Driver.Phases as X (Phase(Cpp))
 import GHC.Data.StringBuffer as X (stringToStringBuffer)
-import GHC.Parser.Lexer as X (P(..), ParseResult(..),
-                              getErrorMessages)
+import GHC.Parser.Lexer as X (P(..), ParseResult(..))
 import GHC.Parser as X (parseStmt, parseType)
 import GHC.Data.FastString as X (fsLit)
 
@@ -88,19 +85,11 @@ import HscTypes as X (mgModSummaries)
 import Outputable as X (PprStyle, SDoc, Outputable(ppr),
                         withPprStyle, defaultErrStyle, vcat)
 
-import ErrUtils as X (mkLocMessage
-#if __GLASGOW_HASKELL__ >= 810
-  , errMsgSpan
-#endif
-  )
+import ErrUtils as X (mkLocMessage, errMsgSpan)
 
 import DriverPhases as X (Phase(Cpp))
 import StringBuffer as X (stringToStringBuffer)
-import Lexer as X (P(..), ParseResult(..), mkPState
-#if __GLASGOW_HASKELL__ >= 810
-  , getErrorMessages
-#endif
-  )
+import Lexer as X (P(..), ParseResult(..), mkPState)
 import Parser as X (parseStmt, parseType)
 import FastString as X (fsLit)
 
@@ -131,6 +120,12 @@ import qualified GHC.Driver.Ppr as GHC (showSDocForUser)
 import qualified GHC.Parser.Lexer as GHC (PState, ParserOpts, mkParserOpts, initParserState)
 import GHC.Data.StringBuffer (StringBuffer)
 import qualified GHC.Driver.Session as DynFlags (warningFlags, extensionFlags, safeImportsOn)
+
+-- ErrorMessages
+import qualified GHC.Parser.Errors.Ppr as GHC (pprError)
+import qualified GHC.Parser.Lexer as GHC (getErrorMessages)
+import qualified GHC.Types.Error as GHC (ErrorMessages, errMsgDiagnostic, unDecorated)
+import GHC.Data.Bag (bagToList)
 #elif MIN_VERSION_ghc(9,0,0)
 -- dynamicGhc
 import GHC.Driver.Ways (hostIsDynamic)
@@ -148,6 +143,10 @@ import qualified GHC.Utils.Outputable as GHC (showSDocForUser)
 -- PState
 import qualified GHC.Parser.Lexer as GHC (PState, ParserFlags, mkParserFlags, mkPStatePure)
 import GHC.Data.StringBuffer (StringBuffer)
+
+-- ErrorMessages
+import qualified GHC.Utils.Error as GHC (ErrorMessages, pprErrMsgBagWithLoc)
+import qualified GHC.Parser.Lexer as GHC (getErrorMessages)
 #else
 -- dynamicGhc
 import qualified DynFlags as GHC (dynamicGhc)
@@ -165,6 +164,14 @@ import qualified Outputable as GHC (showSDocForUser)
 -- PState
 import qualified Lexer as GHC (PState, ParserFlags, mkParserFlags, mkPStatePure)
 import StringBuffer (StringBuffer)
+
+-- ErrorMessages
+import qualified ErrUtils as GHC (ErrorMessages, pprErrMsgBagWithLoc)
+#if MIN_VERSION_ghc(8,10,0)
+import qualified Lexer as GHC (getErrorMessages)
+#else
+import Bag (emptyBag)
+#endif
 #endif
 
 {-------------------- Shims --------------------}
@@ -246,4 +253,20 @@ type ParserOpts = GHC.ParserFlags
 mkParserOpts = GHC.mkParserFlags
 
 initParserState = GHC.mkPStatePure
+#endif
+
+-- ErrorMessages
+getErrorMessages :: GHC.PState -> DynFlags -> GHC.ErrorMessages
+pprErrorMessages :: GHC.ErrorMessages -> [SDoc]
+#if MIN_VERSION_ghc(9,2,0)
+getErrorMessages pstate _ = fmap GHC.pprError $ GHC.getErrorMessages pstate
+pprErrorMessages = bagToList . fmap pprErrorMessage
+  where
+    pprErrorMessage = vcat . GHC.unDecorated . GHC.errMsgDiagnostic
+#elif MIN_VERSION_ghc(8,10,0)
+getErrorMessages = GHC.getErrorMessages
+pprErrorMessages = GHC.pprErrMsgBagWithLoc
+#else
+getErrorMessages _ _ = emptyBag
+pprErrorMessages = GHC.pprErrMsgBagWithLoc
 #endif

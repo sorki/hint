@@ -30,14 +30,13 @@ runParser parser expr =
        case parse_res of
            GHC.POk{}            -> return ParseOk
            --
-#if __GLASGOW_HASKELL__ >= 810
+#if MIN_VERSION_ghc(8,10,0)
            GHC.PFailed pst      -> let errMsgs = GHC.getErrorMessages pst dyn_fl
                                        span = foldr (GHC.combineSrcSpans . GHC.errMsgSpan) GHC.noSrcSpan errMsgs
-                                       err = GHC.vcat $ GHC.pprErrMsgBagWithLoc errMsgs
+                                       err = GHC.vcat $ GHC.pprErrorMessages errMsgs
                                    in pure (ParseError span err)
 #else
-           GHC.PFailed _ span err
-                                -> return (ParseError span err)
+           GHC.PFailed _ span err -> return (ParseError span err)
 #endif
 
 failOnParseError :: MonadInterpreter m
