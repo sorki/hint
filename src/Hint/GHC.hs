@@ -10,14 +10,13 @@ import Control.Monad.Ghc as X (GhcT, runGhcT)
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC.Driver.Types as X (SourceError, srcErrorMessages, GhcApiError)
--- import GHC.Driver.Types as X (mgModSummaries)
 
 import GHC.Utils.Outputable as X (PprStyle, SDoc, Outputable(ppr),
                                   showSDoc, showSDocForUser, showSDocUnqual,
                                   withPprStyle, defaultErrStyle, vcat)
 
 import GHC.Utils.Error as X (mkLocMessage, pprErrMsgBagWithLoc, MsgDoc,
-                             errMsgSpan, pprErrMsgBagWithLoc)
+                             errMsgSpan)
                              -- we alias MsgDoc as Message below
 
 import GHC.Driver.Phases as X (Phase(Cpp), HscSource(HsSrcFile))
@@ -48,7 +47,7 @@ import Outputable as X (PprStyle, SDoc, Outputable(ppr),
 
 import ErrUtils as X (mkLocMessage, pprErrMsgBagWithLoc, MsgDoc
 #if __GLASGOW_HASKELL__ >= 810
-  , errMsgSpan, pprErrMsgBagWithLoc
+  , errMsgSpan
 #endif
   ) -- we alias MsgDoc as Message below
 
