@@ -55,10 +55,13 @@ test_reload_modified = TestCase "reload_modified" [mod_file] $ do
 
 test_lang_exts :: TestCase
 test_lang_exts = TestCase "lang_exts" [mod_file] $ do
-                      liftIO $ writeFile mod_file "data T where T :: T"
+                      liftIO $ writeFile mod_file $ unlines
+                        [ "data Foo = Foo { a :: Int }"
+                        , "f Foo{..} = a * 10"
+                        ]
                       fails do_load @@? "first time, it shouldn't load"
                       --
-                      set [languageExtensions := [GADTs]]
+                      set [languageExtensions := [RecordWildCards]]
                       succeeds do_load @@? "now, it should load"
                       --
                       set [languageExtensions := []]
