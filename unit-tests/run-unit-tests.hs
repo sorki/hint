@@ -230,7 +230,7 @@ test_only_one_instance = TestCase "only_one_instance" [] $ liftIO $ do
 -- is run on an older ghc version. Otherwise this test is not testing what it's
 -- meant to.
 test_multiple_instances :: TestCase
-test_multiple_instances = TestCase "multiple_instances" ["mod_file"] $ liftIO $ do
+test_multiple_instances = TestCase "multiple_instances" [mod_file] $ liftIO $ do
         writeFile mod_file "f = id"
 
         -- ensure the two threads interleave in a deterministic way
