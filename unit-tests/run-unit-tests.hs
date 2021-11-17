@@ -55,10 +55,13 @@ test_reload_modified = TestCase "reload_modified" [mod_file] $ do
 
 test_lang_exts :: TestCase
 test_lang_exts = TestCase "lang_exts" [mod_file] $ do
-                      liftIO $ writeFile mod_file "data T where T :: T"
+                      liftIO $ writeFile mod_file $ unlines
+                        [ "data Foo = Foo { a :: Int }"
+                        , "f Foo{..} = a * 10"
+                        ]
                       fails do_load @@? "first time, it shouldn't load"
                       --
-                      set [languageExtensions := [GADTs]]
+                      set [languageExtensions := [RecordWildCards]]
                       succeeds do_load @@? "now, it should load"
                       --
                       set [languageExtensions := []]
@@ -230,7 +233,7 @@ test_only_one_instance = TestCase "only_one_instance" [] $ liftIO $ do
 -- is run on an older ghc version. Otherwise this test is not testing what it's
 -- meant to.
 test_multiple_instances :: TestCase
-test_multiple_instances = TestCase "multiple_instances" ["mod_file"] $ liftIO $ do
+test_multiple_instances = TestCase "multiple_instances" [mod_file] $ liftIO $ do
         writeFile mod_file "f = id"
 
         -- ensure the two threads interleave in a deterministic way

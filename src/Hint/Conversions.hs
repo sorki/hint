@@ -14,7 +14,8 @@ typeToString t
       -- (i.e., do not expose internals)
       unqual <- runGhc GHC.getPrintUnqual
       withDynFlags $ \df ->
-        return $ GHC.showSDocForUser df unqual (GHC.pprTypeForUser t)
+        -- TODO: get unit state from somewhere?
+        return $ GHC.showSDocForUser df GHC.emptyUnitState unqual (GHC.pprTypeForUser t)
 
 kindToString :: MonadInterpreter m => GHC.Kind -> m String
 kindToString k

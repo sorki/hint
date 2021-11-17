@@ -3,12 +3,10 @@ module Hint.Base (
 
     GhcError(..), InterpreterError(..), mayFail, catchIE,
 
-    InterpreterSession, SessionData(..), GhcErrLogger,
+    InterpreterSession, SessionData(..),
     InterpreterState(..), fromState, onState,
     InterpreterConfiguration(..),
     ImportList(..), ModuleQualification(..), ModuleImport(..),
-
-    runGhc1, runGhc2,
 
     ModuleName, PhantomModule(..),
     findModule, moduleIsLoaded,
@@ -99,19 +97,11 @@ type RunGhc  m a =
     (forall n.(MonadIO n, MonadMask n) => GHC.GhcT n a)
  -> m a
 
-type RunGhc1 m a b =
-    (forall n.(MonadIO n, MonadMask n) => a -> GHC.GhcT n b)
- -> (a -> m b)
-
-type RunGhc2 m a b c =
-    (forall n.(MonadIO n, MonadMask n) => a -> b -> GHC.GhcT n c)
- -> (a -> b -> m c)
-
 data SessionData a = SessionData {
                        internalState   :: IORef InterpreterState,
                        versionSpecific :: a,
                        ghcErrListRef   :: IORef [GhcError],
-                       ghcErrLogger    :: GhcErrLogger
+                       ghcLogger       :: GHC.Logger
                      }
 
 -- When intercepting errors reported by GHC, we only get a ErrUtils.Message
@@ -135,16 +125,8 @@ mapGhcExceptions buildEx action =
 catchIE :: MonadInterpreter m => m a -> (InterpreterError -> m a) -> m a
 catchIE = MC.catch
 
-type GhcErrLogger = GHC.LogAction
-
 -- | Module names are _not_ filepaths.
 type ModuleName = String
-
-runGhc1 :: MonadInterpreter m => RunGhc1 m a b
-runGhc1 f a = runGhc (f a)
-
-runGhc2 :: MonadInterpreter m => RunGhc2 m a b c
-runGhc2 f a = runGhc1 (f a)
 
 -- ================ Handling the interpreter state =================
 
@@ -179,7 +161,8 @@ showGHC :: (MonadInterpreter m, GHC.Outputable a) => a -> m String
 showGHC a
  = do unqual <- runGhc GHC.getPrintUnqual
       withDynFlags $ \df ->
-        return $ GHC.showSDocForUser df unqual (GHC.ppr a)
+        -- TODO: get unit state from somewhere?
+        return $ GHC.showSDocForUser df GHC.emptyUnitState unqual (GHC.ppr a)
 
 -- ================ Misc ===================================
 
@@ -189,7 +172,7 @@ data PhantomModule = PhantomModule{pmName :: ModuleName, pmFile :: FilePath}
 
 findModule :: MonadInterpreter m => ModuleName -> m GHC.Module
 findModule mn = mapGhcExceptions NotAllowed $
-                    runGhc2 GHC.findModule mod_name Nothing
+                    runGhc $ GHC.findModule mod_name Nothing
     where mod_name = GHC.mkModuleName mn
 
 moduleIsLoaded :: MonadInterpreter m => ModuleName -> m Bool

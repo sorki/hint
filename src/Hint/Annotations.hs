@@ -9,13 +9,20 @@ import GHC.Serialized
 import Hint.Base
 import qualified Hint.GHC as GHC
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+import GHC (ms_mod)
+import GHC.Driver.Env (hsc_mod_graph)
+#elif MIN_VERSION_ghc(9,0,0)
 import GHC.Driver.Types (hsc_mod_graph, ms_mod)
+#else
+import HscTypes (hsc_mod_graph, ms_mod)
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
 import GHC.Types.Annotations
 import GHC.Utils.Monad (concatMapM)
 #else
 import Annotations
-import HscTypes (hsc_mod_graph, ms_mod)
 import MonadUtils (concatMapM)
 #endif
 
@@ -29,8 +36,8 @@ getModuleAnnotations _ x = do
 -- Get the annotations associated with a particular function.
 getValAnnotations :: (Data a, MonadInterpreter m) => a -> String -> m [a]
 getValAnnotations _ s = do
-    names <- runGhc1 GHC.parseName s
+    names <- runGhc $ GHC.parseName s
     concatMapM (anns . NamedTarget) names
 
 anns :: (MonadInterpreter m, Data a) => AnnTarget GHC.Name -> m [a]
-anns = runGhc1 (GHC.findGlobalAnns deserializeWithData)
+anns target = runGhc $ GHC.findGlobalAnns deserializeWithData target

@@ -24,19 +24,19 @@ runParser parser expr =
        --
        -- ghc >= 7 panics if noSrcLoc is given
        let srcLoc = GHC.mkRealSrcLoc (GHC.fsLit "<hint>") 1 1
-       let parse_res = GHC.unP parser (GHC.mkPState dyn_fl buf srcLoc)
+       let parserOpts = GHC.mkParserOpts dyn_fl
+       let parse_res = GHC.unP parser (GHC.initParserState parserOpts buf srcLoc)
        --
        case parse_res of
            GHC.POk{}            -> return ParseOk
            --
-#if __GLASGOW_HASKELL__ >= 810
+#if MIN_VERSION_ghc(8,10,0)
            GHC.PFailed pst      -> let errMsgs = GHC.getErrorMessages pst dyn_fl
                                        span = foldr (GHC.combineSrcSpans . GHC.errMsgSpan) GHC.noSrcSpan errMsgs
-                                       err = GHC.vcat $ GHC.pprErrMsgBagWithLoc errMsgs
+                                       err = GHC.vcat $ GHC.pprErrorMessages errMsgs
                                    in pure (ParseError span err)
 #else
-           GHC.PFailed _ span err
-                                -> return (ParseError span err)
+           GHC.PFailed _ span err -> return (ParseError span err)
 #endif
 
 failOnParseError :: MonadInterpreter m
@@ -51,9 +51,9 @@ failOnParseError parser expr = mayFail go
                       ParseError span err ->
                           do -- parsing failed, so we report it just as all
                              -- other errors get reported....
-                             logger <- fromSession ghcErrLogger
+                             logger <- fromSession ghcLogger
                              dflags <- runGhc GHC.getSessionDynFlags
-                             let logger'  = logger dflags
+                             let logger'  = GHC.putLogMsg logger dflags
 #if !MIN_VERSION_ghc(9,0,0)
                                  errStyle = GHC.defaultErrStyle dflags
 #endif
