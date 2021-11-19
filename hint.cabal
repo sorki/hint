@@ -55,7 +55,7 @@ test-suite unit-tests
       build-depends: unix >= 2.2.0.0
   }
 
-  extensions:  CPP
+  default-extensions:  CPP
 
 library
   default-language: Haskell2010
@@ -102,12 +102,12 @@ library
   hs-source-dirs: src
 
   ghc-options: -Wall
-  extensions:  CPP
-               GeneralizedNewtypeDeriving
-               DeriveDataTypeable
-               MagicHash
-               FunctionalDependencies
-               Rank2Types
-               ScopedTypeVariables
-               ExistentialQuantification
-               LambdaCase
+  default-extensions:  CPP
+                       GeneralizedNewtypeDeriving
+                       DeriveDataTypeable
+                       MagicHash
+                       FunctionalDependencies
+                       Rank2Types
+                       ScopedTypeVariables
+                       ExistentialQuantification
+                       LambdaCase
