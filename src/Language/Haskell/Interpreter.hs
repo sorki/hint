@@ -1,14 +1,3 @@
------------------------------------------------------------------------------
--- |
--- Module      :  Language.Haskell.Interpreter
--- License     :  BSD-style
---
--- Maintainer  :  mvdan@mvdan.cc
--- Stability   :  experimental
--- Portability :  non-portable (GHC API)
---
--- A Haskell interpreter built on top of the GHC API
------------------------------------------------------------------------------
 module Language.Haskell.Interpreter(
     -- * The interpreter monad transformer
      MonadInterpreter(..), InterpreterT, Interpreter,

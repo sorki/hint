@@ -9,7 +9,7 @@ description:
         It is, essentially, a huge subset of the GHC API wrapped in a simpler
         API.
 
-synopsis:     Runtime Haskell interpreter (GHC API wrapper)
+synopsis:     A Haskell interpreter built on top of the GHC API
 category:     Language, Compilers/Interpreters
 license:      BSD3
 license-file: LICENSE
