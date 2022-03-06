@@ -406,7 +406,12 @@ noInterpreterError :: Either InterpreterError a -> IO a
 noInterpreterError (Left  e) = assertFailure (show e)
 noInterpreterError (Right a) = pure a
 
-data IOTestCase = IOTestCase String [FilePath] ((Interpreter () -> IO (Either InterpreterError ())) -> IO (Either InterpreterError ()))
+data IOTestCase = IOTestCase
+  String  -- test name
+  [FilePath]  -- temporary files and folders to delete after the test
+  ( (Interpreter () -> IO (Either InterpreterError ()))  -- use this instead of 'runInterpreter'
+ -> IO (Either InterpreterError ())  -- create temporary files and run the test
+  )
 
 runIOTests :: Bool -> [IOTestCase] -> IO HUnit.Counts
 runIOTests sandboxed = HUnit.runTestTT . HUnit.TestList . map build
@@ -425,7 +430,10 @@ runIOTests sandboxed = HUnit.runTestTT . HUnit.TestList . map build
                                                when existsD $
                                                   removeDirectory f
 
-data TestCase = TestCase String [FilePath] (Interpreter ())
+data TestCase = TestCase
+  String  -- test name
+  [FilePath]  -- temporary files and folders to delete after the test
+  (Interpreter ())  -- create temporary files and run the test
 
 runTests :: Bool -> [TestCase] -> IO HUnit.Counts
 runTests sandboxed = runIOTests sandboxed . map toIOTestCase
