@@ -11,6 +11,10 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar
 import Control.Concurrent.STM
 
+import qualified Data.ByteString.Lazy as ByteString
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import Data.Function ((&))
 import Data.IORef
 
 import System.IO
@@ -296,6 +300,24 @@ test_normalize_type = TestCase "normalize_type" [mod_file] $ do
 test_package_db :: IOTestCase
 test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
         setup
+        ghcVersionOutput <- readProcessStdout_ $ proc "ghc" ["--version"]
+        let ghcVersion
+              :: String
+            ghcVersion
+              = ghcVersionOutput
+                -- "The Glorious Glasgow Haskell Compilation System, version 8.8.4" :: ByteString.Lazy
+              & ByteString.toStrict
+                -- "The Glorious Glasgow Haskell Compilation System, version 8.8.4" :: ByteString
+              & Text.decodeUtf8
+                -- "The Glorious Glasgow Haskell Compilation System, version 8.8.4" :: Text
+              & Text.unpack
+                -- "The Glorious Glasgow Haskell Compilation System, version 8.8.4" :: String
+              & words
+                -- ["The","Glorious","Glasgow","Haskell","Compilation","System,","version","8.8.4"]
+              & last
+                -- "8.8.4"
+        let pkgdb    = dir </> "dist-newstyle" </> "packagedb" </> ("ghc-" ++ ghcVersion)
+            ghc_args = ["-package-db=" ++ pkgdb]
         wrapInterp (unsafeRunInterpreterWithArgs ghc_args) $ do
           --succeeds (setImports [mod]) @@? "module from package-db must be visible"
           setImports [mod]
@@ -303,8 +325,6 @@ test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
     where pkg      = "my-package"
           dir      = pkg
           mod_file = dir </> mod <.> "hs"
-          pkgdb    = dir </> "dist-newstyle" </> "packagedb" </> "ghc-8.8.4"  -- TODO: detect correct path
-          ghc_args = ["-package-db=" ++ pkgdb]
           mod      = "MyModule"
           cabal_file = dir </> pkg <.> "cabal"
           setup    = do createDirectory dir
