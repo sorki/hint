@@ -20,6 +20,7 @@ import Data.IORef
 import System.IO
 import System.FilePath
 import System.Directory
+import System.Environment (getEnvironment)
 import System.Exit
 import System.Process.Typed
 #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
@@ -340,8 +341,10 @@ test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
                           [ "{-# LANGUAGE NoImplicitPrelude #-}"
                           , "module " ++ mod ++ " where"
                           ]
+                        env <- getEnvironment
                         runProcess_
                           $ setWorkingDir dir
+                          $ setEnv (filter ((/= "GHC_PACKAGE_PATH") . fst) env)
                           $ proc "cabal" ["build"]
 
 -- earlier versions of hint were accidentally overwriting the signal handlers
