@@ -77,8 +77,6 @@ initialize :: (MonadIO m, MonadThrow m, MonadMask m, Functor m)
            -> InterpreterT m ()
 initialize args =
     do logger <- fromSession ghcLogger
-       runGhc $ GHC.modifyLogger (const logger)
-
        -- Set a custom log handler, to intercept error messages :S
        df0 <- runGhc GHC.getSessionDynFlags
 
@@ -91,6 +89,7 @@ initialize args =
 
        -- Observe that, setSessionDynFlags loads info on packages
        -- available; calling this function once is mandatory!
+       runGhc $ GHC.modifyLogger (const logger)
        _ <- runGhc $ GHC.setSessionDynFlags df2
 
        let extMap      = [ (GHC.flagSpecName flagSpec, GHC.flagSpecFlag flagSpec)
