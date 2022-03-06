@@ -23,7 +23,7 @@ typeOf expr =
 
 -- | Tests if the expression type checks.
 --
--- NB. Be careful if there is `-fdefer-type-errors` involved.
+-- NB. Be careful if @unsafeSetGhcOption "-fdefer-type-errors"@ is used.
 -- Perhaps unsurprisingly, that can falsely make @typeChecks@ and @typeChecksWithDetails@
 -- return @True@ and @Right _@ respectively.
 typeChecks :: MonadInterpreter m => String -> m Bool
