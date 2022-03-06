@@ -17,6 +17,7 @@ import System.IO
 import System.FilePath
 import System.Directory
 import System.Exit
+import System.Process.Typed
 #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
 #else
 import System.Posix.Signals
@@ -26,6 +27,7 @@ import Test.HUnit ((@?=), (@?), assertFailure)
 import qualified Test.HUnit as HUnit
 
 import Language.Haskell.Interpreter
+import Language.Haskell.Interpreter.Unsafe
 
 test_reload_modified :: TestCase
 test_reload_modified = TestCase "reload_modified" [mod_file] $ do
@@ -291,6 +293,41 @@ test_normalize_type = TestCase "normalize_type" [mod_file] $ do
                              ,"type instance Foo x = ()"]
           mod_file = "TEST_NormalizeType.hs"
 
+test_package_db :: IOTestCase
+test_package_db
+  = IOTestCase
+      "package_db"
+      [dir]
+      (unsafeRunInterpreterWithArgs ghc_args) $ \runInterp -> do
+        setup
+        runInterp $ do
+          --succeeds (setImports [mod]) @@? "module from package-db must be visible"
+          setImports [mod]
+    --
+    where pkg      = "my-package"
+          dir      = pkg
+          mod_file = dir </> mod <.> "hs"
+          pkgdb    = dir </> "dist-newstyle" </> "packagedb" </> "ghc-8.8.4"  -- TODO: detect correct path
+          ghc_args = ["-package-db=" ++ pkgdb]
+          mod      = "MyModule"
+          cabal_file = dir </> pkg <.> "cabal"
+          setup    = do createDirectory dir
+                        writeFile cabal_file $ unlines
+                          [ "cabal-version: 2.4"
+                          , "name: " ++ pkg
+                          , "version: 0.1.0.0"
+                          , ""
+                          , "library"
+                          , "  exposed-modules: " ++ mod
+                          ]
+                        writeFile mod_file $ unlines
+                          [ "{-# LANGUAGE NoImplicitPrelude #-}"
+                          , "module " ++ mod ++ " where"
+                          ]
+                        runProcess_
+                          $ setWorkingDir dir
+                          $ proc "cabal" ["build"]
+
 -- earlier versions of hint were accidentally overwriting the signal handlers
 -- for ^C and others.
 --
@@ -357,6 +394,7 @@ tests = [test_reload_modified
 
 ioTests :: [IOTestCase]
 ioTests = [test_signal_handlers
+          ,test_package_db
           ]
 
 main :: IO ()
@@ -429,7 +467,7 @@ runIOTests sandboxed = HUnit.runTestTT . HUnit.TestList . map build
                                           else
                                             do existsD <- doesDirectoryExist f
                                                when existsD $
-                                                  removeDirectory f
+                                                  removeDirectoryRecursive f
 
 data TestCase = TestCase
   String  -- test name
