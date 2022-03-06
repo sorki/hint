@@ -299,7 +299,7 @@ test_normalize_type = TestCase "normalize_type" [mod_file] $ do
 -- succeeds when executed from ghci and ghcid, regardless of whether the problematic
 -- behaviour has been fixed or not.
 test_signal_handlers :: IOTestCase
-test_signal_handlers = IOTestCase "signal_handlers" [] $ \runInterp -> do
+test_signal_handlers = IOTestCase "signal_handlers" [] runInterpreter $ \runInterp -> do
 #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
         runInterp $ do
           pure ()
@@ -409,17 +409,18 @@ noInterpreterError (Right a) = pure a
 data IOTestCase = IOTestCase
   String  -- test name
   [FilePath]  -- temporary files and folders to delete after the test
-  ( (Interpreter () -> IO (Either InterpreterError ()))  -- use this instead of 'runInterpreter'
+  (Interpreter () -> IO (Either InterpreterError ()))  -- 'runInterpreter' or a variant thereof
+  ( (Interpreter () -> IO (Either InterpreterError ()))  -- use this wrapper instead of said variant
  -> IO (Either InterpreterError ())  -- create temporary files and run the test
   )
 
 runIOTests :: Bool -> [IOTestCase] -> IO HUnit.Counts
 runIOTests sandboxed = HUnit.runTestTT . HUnit.TestList . map build
-    where build (IOTestCase title tmps test) = HUnit.TestLabel title $
-                                                   HUnit.TestCase test_case
+    where build (IOTestCase title tmps runInterp test)
+            = HUnit.TestLabel title $ HUnit.TestCase test_case
             where test_case = go `finally` clean_up
                   clean_up = mapM_ removeIfExists tmps
-                  go       = do r <- test (\body -> runInterpreter
+                  go       = do r <- test (\body -> runInterp
                                             (when sandboxed setSandbox >> body))
                                 noInterpreterError r
                   removeIfExists f = do existsF <- doesFileExist f
@@ -439,4 +440,4 @@ runTests :: Bool -> [TestCase] -> IO HUnit.Counts
 runTests sandboxed = runIOTests sandboxed . map toIOTestCase
   where
     toIOTestCase :: TestCase -> IOTestCase
-    toIOTestCase (TestCase title tmps test) = IOTestCase title tmps ($ test)
+    toIOTestCase (TestCase title tmps test) = IOTestCase title tmps runInterpreter ($ test)
