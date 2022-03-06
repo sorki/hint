@@ -294,13 +294,9 @@ test_normalize_type = TestCase "normalize_type" [mod_file] $ do
           mod_file = "TEST_NormalizeType.hs"
 
 test_package_db :: IOTestCase
-test_package_db
-  = IOTestCase
-      "package_db"
-      [dir]
-      (unsafeRunInterpreterWithArgs ghc_args) $ \runInterp -> do
+test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
         setup
-        runInterp $ do
+        wrapInterp (unsafeRunInterpreterWithArgs ghc_args) $ do
           --succeeds (setImports [mod]) @@? "module from package-db must be visible"
           setImports [mod]
     --
@@ -336,9 +332,9 @@ test_package_db
 -- succeeds when executed from ghci and ghcid, regardless of whether the problematic
 -- behaviour has been fixed or not.
 test_signal_handlers :: IOTestCase
-test_signal_handlers = IOTestCase "signal_handlers" [] runInterpreter $ \runInterp -> do
+test_signal_handlers = IOTestCase "signal_handlers" [] $ \wrapInterp -> do
 #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
-        runInterp $ do
+        wrapInterp runInterpreter $ do
           pure ()
 #else
         signalDetectedRef <- newIORef False
@@ -348,7 +344,7 @@ test_signal_handlers = IOTestCase "signal_handlers" [] runInterpreter $ \runInte
             acquire = installHandler sigINT (Catch detectSignal) Nothing
             release handler = installHandler sigINT handler Nothing
         r <- bracket acquire release $ \_ -> do
-          runInterp $ do
+          wrapInterp runInterpreter $ do
             liftIO $ do
               r <- try $ do
                 raiseSignal sigINT
@@ -447,19 +443,20 @@ noInterpreterError (Right a) = pure a
 data IOTestCase = IOTestCase
   String  -- test name
   [FilePath]  -- temporary files and folders to delete after the test
-  (Interpreter () -> IO (Either InterpreterError ()))  -- 'runInterpreter' or a variant thereof
-  ( (Interpreter () -> IO (Either InterpreterError ()))  -- use this wrapper instead of said variant
+  ( ( (Interpreter () -> IO (Either InterpreterError ()))
+   -> (Interpreter () -> IO (Either InterpreterError ()))
+    ) -- please wrap your 'runInterpreter' calls with this
  -> IO (Either InterpreterError ())  -- create temporary files and run the test
   )
 
 runIOTests :: Bool -> [IOTestCase] -> IO HUnit.Counts
 runIOTests sandboxed = HUnit.runTestTT . HUnit.TestList . map build
-    where build (IOTestCase title tmps runInterp test)
+    where build (IOTestCase title tmps test)
             = HUnit.TestLabel title $ HUnit.TestCase test_case
             where test_case = go `finally` clean_up
                   clean_up = mapM_ removeIfExists tmps
-                  go       = do r <- test (\body -> runInterp
-                                            (when sandboxed setSandbox >> body))
+                  wrapInterp runInterp body = runInterp (when sandboxed setSandbox >> body)
+                  go       = do r <- test wrapInterp
                                 noInterpreterError r
                   removeIfExists f = do existsF <- doesFileExist f
                                         if existsF
@@ -478,4 +475,5 @@ runTests :: Bool -> [TestCase] -> IO HUnit.Counts
 runTests sandboxed = runIOTests sandboxed . map toIOTestCase
   where
     toIOTestCase :: TestCase -> IOTestCase
-    toIOTestCase (TestCase title tmps test) = IOTestCase title tmps runInterpreter ($ test)
+    toIOTestCase (TestCase title tmps test) = IOTestCase title tmps $ \wrapInterp -> do
+      wrapInterp runInterpreter test
