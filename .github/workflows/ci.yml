@@ -24,7 +24,7 @@ jobs:
         stack_yaml:
           - stack-8.6.5.yaml
           - stack-8.8.4.yaml
-          - stack-8.10.4.yaml
+          - stack-8.10.7.yaml
           - stack-9.0.1.yaml
           - stack-9.2.1.yaml
         os:
