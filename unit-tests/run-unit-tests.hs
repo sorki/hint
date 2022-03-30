@@ -20,7 +20,7 @@ import Data.IORef
 import System.IO
 import System.FilePath
 import System.Directory
-import System.Environment (getEnvironment)
+import System.Environment (getEnvironment, unsetEnv)
 import System.Exit
 import System.Process.Typed
 #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
@@ -319,6 +319,7 @@ test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
                 -- "8.8.4"
         let pkgdb    = dir </> "dist-newstyle" </> "packagedb" </> ("ghc-" ++ ghcVersion)
             ghc_args = ["-package-db=" ++ pkgdb]
+        unsetEnv "GHC_ENVIRONMENT"
         wrapInterp (unsafeRunInterpreterWithArgs ghc_args) $ do
           --succeeds (setImports [mod]) @@? "module from package-db must be visible"
           setImports [mod]
