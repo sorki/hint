@@ -319,7 +319,12 @@ test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
                 -- "8.8.4"
         let pkgdb    = dir </> "dist-newstyle" </> "packagedb" </> ("ghc-" ++ ghcVersion)
             ghc_args = ["-package-db=" ++ pkgdb]
+
+        -- stack sets GHC_ENVIRONMENT to a file which pins down the versions of
+        -- all the packages we can load, and since it does not list my-package,
+        -- we cannot load it.
         unsetEnv "GHC_ENVIRONMENT"
+
         wrapInterp (unsafeRunInterpreterWithArgs ghc_args) $ do
           --succeeds (setImports [mod]) @@? "module from package-db must be visible"
           setImports [mod]
@@ -345,7 +350,9 @@ test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
                         env <- getEnvironment
                         runProcess_
                           $ setWorkingDir dir
-                          $ setEnv (filter ((/= "GHC_PACKAGE_PATH") . fst) env)
+                          $ -- stack sets GHC_PACKAGE_PATH, but cabal complains
+                            -- that it cannot run if that variable is set.
+                            setEnv (filter ((/= "GHC_PACKAGE_PATH") . fst) env)
                           $ proc "cabal" ["build"]
 
 -- earlier versions of hint were accidentally overwriting the signal handlers
