@@ -11,12 +11,18 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar
 import Control.Concurrent.STM
 
+import qualified Data.ByteString.Lazy as ByteString
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import Data.Function ((&))
 import Data.IORef
 
 import System.IO
 import System.FilePath
 import System.Directory
+import System.Environment (getEnvironment, unsetEnv)
 import System.Exit
+import System.Process.Typed
 #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
 #else
 import System.Posix.Signals
@@ -26,6 +32,7 @@ import Test.HUnit ((@?=), (@?), assertFailure)
 import qualified Test.HUnit as HUnit
 
 import Language.Haskell.Interpreter
+import Language.Haskell.Interpreter.Unsafe
 
 test_reload_modified :: TestCase
 test_reload_modified = TestCase "reload_modified" [mod_file] $ do
@@ -291,6 +298,63 @@ test_normalize_type = TestCase "normalize_type" [mod_file] $ do
                              ,"type instance Foo x = ()"]
           mod_file = "TEST_NormalizeType.hs"
 
+test_package_db :: IOTestCase
+test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
+        setup
+        ghcVersionOutput <- readProcessStdout_ $ proc "ghc" ["--version"]
+        let ghcVersion
+              :: String
+            ghcVersion
+              = ghcVersionOutput
+                -- "The Glorious Glasgow Haskell Compilation System, version 8.8.4" :: ByteString.Lazy
+              & ByteString.toStrict
+                -- "The Glorious Glasgow Haskell Compilation System, version 8.8.4" :: ByteString
+              & Text.decodeUtf8
+                -- "The Glorious Glasgow Haskell Compilation System, version 8.8.4" :: Text
+              & Text.unpack
+                -- "The Glorious Glasgow Haskell Compilation System, version 8.8.4" :: String
+              & words
+                -- ["The","Glorious","Glasgow","Haskell","Compilation","System,","version","8.8.4"]
+              & last
+                -- "8.8.4"
+        let pkgdb    = dir </> "dist-newstyle" </> "packagedb" </> ("ghc-" ++ ghcVersion)
+            ghc_args = ["-package-db=" ++ pkgdb]
+
+        -- stack sets GHC_ENVIRONMENT to a file which pins down the versions of
+        -- all the packages we can load, and since it does not list my-package,
+        -- we cannot load it.
+        unsetEnv "GHC_ENVIRONMENT"
+
+        wrapInterp (unsafeRunInterpreterWithArgs ghc_args) $ do
+          --succeeds (setImports [mod]) @@? "module from package-db must be visible"
+          setImports [mod]
+    --
+    where pkg      = "my-package"
+          dir      = pkg
+          mod_file = dir </> mod <.> "hs"
+          mod      = "MyModule"
+          cabal_file = dir </> pkg <.> "cabal"
+          setup    = do createDirectory dir
+                        writeFile cabal_file $ unlines
+                          [ "cabal-version: 2.4"
+                          , "name: " ++ pkg
+                          , "version: 0.1.0.0"
+                          , ""
+                          , "library"
+                          , "  exposed-modules: " ++ mod
+                          ]
+                        writeFile mod_file $ unlines
+                          [ "{-# LANGUAGE NoImplicitPrelude #-}"
+                          , "module " ++ mod ++ " where"
+                          ]
+                        env <- getEnvironment
+                        runProcess_
+                          $ setWorkingDir dir
+                          $ -- stack sets GHC_PACKAGE_PATH, but cabal complains
+                            -- that it cannot run if that variable is set.
+                            setEnv (filter ((/= "GHC_PACKAGE_PATH") . fst) env)
+                          $ proc "cabal" ["build"]
+
 -- earlier versions of hint were accidentally overwriting the signal handlers
 -- for ^C and others.
 --
@@ -299,9 +363,9 @@ test_normalize_type = TestCase "normalize_type" [mod_file] $ do
 -- succeeds when executed from ghci and ghcid, regardless of whether the problematic
 -- behaviour has been fixed or not.
 test_signal_handlers :: IOTestCase
-test_signal_handlers = IOTestCase "signal_handlers" [] $ \runInterp -> do
+test_signal_handlers = IOTestCase "signal_handlers" [] $ \wrapInterp -> do
 #if defined(mingw32_HOST_OS) || defined(__MINGW32__)
-        runInterp $ do
+        wrapInterp runInterpreter $ do
           pure ()
 #else
         signalDetectedRef <- newIORef False
@@ -311,7 +375,7 @@ test_signal_handlers = IOTestCase "signal_handlers" [] $ \runInterp -> do
             acquire = installHandler sigINT (Catch detectSignal) Nothing
             release handler = installHandler sigINT handler Nothing
         r <- bracket acquire release $ \_ -> do
-          runInterp $ do
+          wrapInterp runInterpreter $ do
             liftIO $ do
               r <- try $ do
                 raiseSignal sigINT
@@ -357,6 +421,7 @@ tests = [test_reload_modified
 
 ioTests :: [IOTestCase]
 ioTests = [test_signal_handlers
+          ,test_package_db
           ]
 
 main :: IO ()
@@ -406,16 +471,23 @@ noInterpreterError :: Either InterpreterError a -> IO a
 noInterpreterError (Left  e) = assertFailure (show e)
 noInterpreterError (Right a) = pure a
 
-data IOTestCase = IOTestCase String [FilePath] ((Interpreter () -> IO (Either InterpreterError ())) -> IO (Either InterpreterError ()))
+data IOTestCase = IOTestCase
+  String  -- test name
+  [FilePath]  -- temporary files and folders to delete after the test
+  ( ( (Interpreter () -> IO (Either InterpreterError ()))
+   -> (Interpreter () -> IO (Either InterpreterError ()))
+    ) -- please wrap your 'runInterpreter' calls with this
+ -> IO (Either InterpreterError ())  -- create temporary files and run the test
+  )
 
 runIOTests :: Bool -> [IOTestCase] -> IO HUnit.Counts
 runIOTests sandboxed = HUnit.runTestTT . HUnit.TestList . map build
-    where build (IOTestCase title tmps test) = HUnit.TestLabel title $
-                                                   HUnit.TestCase test_case
+    where build (IOTestCase title tmps test)
+            = HUnit.TestLabel title $ HUnit.TestCase test_case
             where test_case = go `finally` clean_up
                   clean_up = mapM_ removeIfExists tmps
-                  go       = do r <- test (\body -> runInterpreter
-                                            (when sandboxed setSandbox >> body))
+                  wrapInterp runInterp body = runInterp (when sandboxed setSandbox >> body)
+                  go       = do r <- test wrapInterp
                                 noInterpreterError r
                   removeIfExists f = do existsF <- doesFileExist f
                                         if existsF
@@ -423,12 +495,16 @@ runIOTests sandboxed = HUnit.runTestTT . HUnit.TestList . map build
                                           else
                                             do existsD <- doesDirectoryExist f
                                                when existsD $
-                                                  removeDirectory f
+                                                  removeDirectoryRecursive f
 
-data TestCase = TestCase String [FilePath] (Interpreter ())
+data TestCase = TestCase
+  String  -- test name
+  [FilePath]  -- temporary files and folders to delete after the test
+  (Interpreter ())  -- create temporary files and run the test
 
 runTests :: Bool -> [TestCase] -> IO HUnit.Counts
 runTests sandboxed = runIOTests sandboxed . map toIOTestCase
   where
     toIOTestCase :: TestCase -> IOTestCase
-    toIOTestCase (TestCase title tmps test) = IOTestCase title tmps ($ test)
+    toIOTestCase (TestCase title tmps test) = IOTestCase title tmps $ \wrapInterp -> do
+      wrapInterp runInterpreter test
