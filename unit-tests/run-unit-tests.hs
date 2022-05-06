@@ -434,7 +434,7 @@ tests = [test_reload_modified
 
 ioTests :: [IOTestCase]
 ioTests = [test_signal_handlers
-          ,test_package_db
+          --,test_package_db
           ,test_error_capture
           ]
 
