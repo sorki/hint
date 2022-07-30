@@ -1,6 +1,13 @@
-### 0.9.0.5
+### 0.9.0.6
+
+* Fixes the 0.9.0.5 regression
+* Small fix in documentation (thanks to Ed Behn)
+
+### 0.9.0.5 (deprecated)
 
 * Support GHC 9.2.1
+* Deprecated because it breaks the common pattern of using
+  'unsafeRunInterpreterWithArgs' to load a custom package database.
 
 ### 0.9.0.4
 
