@@ -32,7 +32,7 @@ runParser parser expr =
            --
 #if MIN_VERSION_ghc(8,10,0)
            GHC.PFailed pst      -> let errMsgs = GHC.getErrorMessages pst dyn_fl
-                                       span = foldr (GHC.combineSrcSpans . GHC.errMsgSpan) GHC.noSrcSpan errMsgs
+                                       span = GHC.errMsgSpan errMsgs
                                        err = GHC.vcat $ GHC.pprErrorMessages errMsgs
                                    in pure (ParseError span err)
 #else
@@ -54,16 +54,11 @@ failOnParseError parser expr = mayFail go
                              logger <- fromSession ghcLogger
                              dflags <- runGhc GHC.getSessionDynFlags
                              let logger'  = GHC.putLogMsg logger dflags
-#if !MIN_VERSION_ghc(9,0,0)
-                                 errStyle = GHC.defaultErrStyle dflags
-#endif
+
                              liftIO $ logger'
                                               GHC.NoReason
                                               GHC.SevError
                                               span
-#if !MIN_VERSION_ghc(9,0,0)
-                                              errStyle
-#endif
                                               err
                              --
                              -- behave like the rest of the GHC API functions

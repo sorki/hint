@@ -27,6 +27,7 @@ jobs:
           - stack-8.10.7.yaml
           - stack-9.0.2.yaml
           - stack-9.2.3.yaml
+          - stack-9.4.3.yaml
         os:
           - ubuntu-latest
 
@@ -41,7 +42,7 @@ jobs:
           .stack-work
         key: ${{ runner.os }}-stack-${{ hashFiles(matrix.stack_yaml) }}
 
-    - uses: haskell/actions/setup@v1
+    - uses: haskell/actions/setup@v2
       id: setup-haskell-stack
       name: Setup Stack
       with:
