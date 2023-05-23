@@ -28,6 +28,7 @@ jobs:
           - stack-9.0.2.yaml
           - stack-9.2.3.yaml
           - stack-9.4.3.yaml
+          - stack-9.6.1.yaml
         os:
           - ubuntu-latest
 
