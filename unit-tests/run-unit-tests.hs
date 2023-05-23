@@ -318,7 +318,7 @@ test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
               & last
                 -- "8.8.4"
         let pkgdb    = dir </> "dist-newstyle" </> "packagedb" </> ("ghc-" ++ ghcVersion)
-            ghc_args = ["-package-db=" ++ pkgdb]
+            ghc_args = ["-package-db=" ++ pkgdb,"-package-env","-"]
 
         -- stack sets GHC_ENVIRONMENT to a file which pins down the versions of
         -- all the packages we can load, and since it does not list my-package,
