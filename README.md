@@ -9,14 +9,28 @@ You can choose which modules should be in scope while evaluating these
 expressions, you can browse the contents of those modules, and you can ask for
 the type of the identifiers you're browsing.
 
-It is, essentially, a huge subset of the GHC API wrapped in a simpler API.
+It is, essentially, a subset of the GHC API wrapped in a simpler API.
 
 ## Limitations
+
+Importing a module from the current package is not supported. It might look
+like it works on one day and then segfault the next day. You have been warned.
+
+To work around this limitation, move those modules to a separate package. Now
+the part of your code which calls hint and the code interpreted by hint can
+both import that module.
+
+It is not possible to exchange a value [whose type involves an implicit kind
+parameter](https://github.com/haskell-hint/hint/issues/159#issuecomment-1575629607).
+This includes type-level lists. To work around this limitation, [define a
+newtype wrapper which wraps the type you
+want](https://github.com/haskell-hint/hint/issues/159#issuecomment-1575640606).
 
 It is possible to run the interpreter inside a thread, but on GHC 8.8 and
 below, you can't run two instances of the interpreter simultaneously.
 
-GHC must be installed on the system on which the compiled executable is running.
+GHC must be installed on the system on which the compiled executable is
+running. There is a workaround for this but [it's not trivial](https://github.com/haskell-hint/hint/issues/80#issuecomment-963109968).
 
 ## Example
 

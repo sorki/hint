@@ -187,7 +187,10 @@ isPhantomModule mn = do (as,zs) <- getPhantomModules
 
 -- | Tries to load all the requested modules from their source file.
 --   Modules my be indicated by their ModuleName (e.g. \"My.Module\") or
---   by the full path to its source file.
+--   by the full path to its source file. Note that in order to use code from
+--   that module, you also need to call 'setImports' (to use the exported types
+--   and definitions) or 'setTopLevelModules' (to also use the private types
+--   and definitions).
 --
 -- The interpreter is 'reset' both before loading the modules and in the event
 -- of an error.
@@ -267,7 +270,11 @@ setTopLevelModules ms =
        (_, old_imports) <- runGhc getContext
        runGhc $ setContext ms_mods old_imports
 
--- | Sets the modules whose exports must be in context.
+-- | Sets the modules whose exports must be in context. These can be modules
+-- previously loaded with 'loadModules', or modules from packages which hint is
+-- aware of. This includes package databases specified to
+-- 'unsafeRunInterpreterWithArgs' by the @-package-db=...@ parameter, and
+-- packages specified by a ghc environment file created by @cabal build --write-ghc-environment-files=always@.
 --
 --   Warning: 'setImports', 'setImportsQ', and 'setImportsF' are mutually exclusive.
 --   If you have a list of modules to be used qualified and another list
@@ -277,8 +284,7 @@ setTopLevelModules ms =
 setImports :: MonadInterpreter m => [ModuleName] -> m ()
 setImports ms = setImportsF $ map (\m -> ModuleImport m NotQualified NoImportList) ms
 
--- | Sets the modules whose exports must be in context; some
---   of them may be qualified. E.g.:
+-- | A variant of 'setImports' where modules them may be qualified. e.g.:
 --
 --   @setImportsQ [("Prelude", Nothing), ("Data.Map", Just "M")]@.
 --
@@ -286,8 +292,7 @@ setImports ms = setImportsF $ map (\m -> ModuleImport m NotQualified NoImportLis
 setImportsQ :: MonadInterpreter m => [(ModuleName, Maybe String)] -> m ()
 setImportsQ ms = setImportsF $ map (\(m,q) -> ModuleImport m (maybe NotQualified (QualifiedAs . Just) q) NoImportList) ms
 
--- | Sets the modules whose exports must be in context; some
---   may be qualified or have imports lists. E.g.:
+-- | A variant of 'setImportsQ' where modules may have an explicit import list. e.g.:
 --
 --   @setImportsF [ModuleImport "Prelude" NotQualified NoImportList, ModuleImport "Data.Text" (QualifiedAs $ Just "Text") (HidingList ["pack"])]@
 
