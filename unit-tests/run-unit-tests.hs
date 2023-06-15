@@ -209,7 +209,7 @@ test_search_path_dot =
 test_catch :: TestCase
 test_catch = TestCase "catch" [] $ do
         setImports ["Prelude"]
-        succeeds (action `catch` handler) @@? "catch failed"
+        (action `catch` handler) @@?= "catched"
     where handler DivideByZero = return "catched"
           handler e = throwM e
           action = do s <- eval "1 `div` 0 :: Int"
