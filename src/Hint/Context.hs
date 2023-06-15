@@ -218,11 +218,9 @@ loadModules fs = do -- first, unload everything, and do some clean-up
                     doLoad fs `catchIE` (\e -> reset >> throwM e)
 
 doLoad :: MonadInterpreter m => [String] -> m ()
-doLoad fs = mayFail $ do
-                   targets <- mapM (\f->runGhc $ GHC.guessTarget f Nothing) fs
-                   --
-                   res <- reinstallSupportModule targets
-                   return $ guard (isSucceeded res) >> Just ()
+doLoad fs = do targets <- mapM (\f->runGhc $ GHC.guessTarget f Nothing) fs
+               --
+               reinstallSupportModule targets
 
 -- | Returns True if the module was interpreted.
 isModuleInterpreted :: MonadInterpreter m => ModuleName -> m Bool
@@ -385,17 +383,15 @@ reset = do -- clean up context
            cleanPhantomModules
            --
            -- Now, install a support module
-           res <- installSupportModule []
-           mayFail (return $ guard (isSucceeded res) >> Just ())
+           installSupportModule []
 
 -- Load a phantom module with all the symbols from the prelude we need
-installSupportModule :: MonadInterpreter m => [GHC.Target] -> m GHC.SuccessFlag
+installSupportModule :: MonadInterpreter m => [GHC.Target] -> m ()
 installSupportModule ts = do runGhc $ GHC.setTargets ts
                              mod <- addPhantomModule support_module
                              onState (\st -> st{hintSupportModule = mod})
                              mod' <- findModule (pmName mod)
                              runGhc $ setContext [mod'] []
-                             return GHC.Succeeded
     --
     where support_module m = unlines [
                                "module " ++ m ++ "( ",
@@ -416,7 +412,7 @@ installSupportModule ts = do runGhc $ GHC.setTargets ts
 
 -- Call it when the support module is an active phantom module but has been
 -- unloaded as a side effect by GHC (e.g. by calling GHC.loadTargets)
-reinstallSupportModule :: [GHC.Target] -> MonadInterpreter m => m GHC.SuccessFlag
+reinstallSupportModule :: [GHC.Target] -> MonadInterpreter m => m ()
 reinstallSupportModule ts = do pm <- fromState hintSupportModule
                                removePhantomModule pm
                                installSupportModule ts
