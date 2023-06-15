@@ -9,8 +9,6 @@ You can choose which modules should be in scope while evaluating these
 expressions, you can browse the contents of those modules, and you can ask for
 the type of the identifiers you're browsing.
 
-It is, essentially, a subset of the GHC API wrapped in a simpler API.
-
 ## Limitations
 
 Importing a module from the current package is not supported. It might look
