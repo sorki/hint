@@ -1,3 +1,9 @@
+### 0.9.0.7
+
+* Support GHC 9.4
+* Support GHC 9.6
+* Improved documentation
+
 ### 0.9.0.6
 
 * Fixes the 0.9.0.5 regression
