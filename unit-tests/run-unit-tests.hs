@@ -446,6 +446,8 @@ test_ghc_environment_file = IOTestCase "ghc_environment_file" [dir] $ \wrapInter
                           ]
                         env <- getEnvironment
                         runProcess_
+                          $ proc "cabal" ["update"]
+                        runProcess_
                           $ setWorkingDir dir
                           $ -- stack sets GHC_PACKAGE_PATH, but cabal complains
                             -- that it cannot run if that variable is set.
