@@ -390,22 +390,14 @@ reset = do -- clean up context
 
 -- Load a phantom module with all the symbols from the prelude we need
 installSupportModule :: MonadInterpreter m => Maybe [GHC.Target] -> m GHC.SuccessFlag
-installSupportModule tM = do mod <- addPhantomModule support_module
+installSupportModule tM = do case tM of
+                               Nothing -> runGhc $ GHC.setTargets []
+                               Just ts -> runGhc $ GHC.setTargets ts
+                             mod <- addPhantomModule support_module
                              onState (\st -> st{hintSupportModule = mod})
-                             case tM of
-                                Nothing -> do
-                                  mod' <- findModule (pmName mod)
-                                  runGhc $ setContext [mod'] []
-                                  return GHC.Succeeded
-                                Just ts -> do
-                                  runGhc $ GHC.setTargets ts
-                                  df <- runGhc GHC.getSessionDynFlags
-                                  let t = GHC.fileTarget df (pmFile mod)
-                                  runGhc $ GHC.addTarget t
-                                  res <- runGhc $ GHC.load GHC.LoadAllTargets
-                                  mod' <- findModule (pmName mod)
-                                  runGhc $ setContext [mod'] []
-                                  return res
+                             mod' <- findModule (pmName mod)
+                             runGhc $ setContext [mod'] []
+                             return GHC.Succeeded
     --
     where support_module m = unlines [
                                "module " ++ m ++ "( ",
