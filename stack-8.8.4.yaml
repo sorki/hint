@@ -1,4 +1,6 @@
 resolver: lts-16.31
 packages:
 - .
-extra-deps: []
+extra-deps:
+  # for the ghc-environment-file test
+  - acme-dont-1.2

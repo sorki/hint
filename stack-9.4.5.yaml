@@ -1,4 +1,5 @@
-resolver: lts-19.33
+resolver: nightly-2023-05-23
+compiler: ghc-9.4.5
 packages:
 - .
 extra-deps:
