@@ -209,11 +209,62 @@ test_search_path_dot =
 test_catch :: TestCase
 test_catch = TestCase "catch" [] $ do
         setImports ["Prelude"]
-        (action `catch` handler) @@?= "catched"
-    where handler DivideByZero = return "catched"
-          handler e = throwM e
-          action = do s <- eval "1 `div` 0 :: Int"
-                      return $! s
+
+        -- make sure we catch exceptions in return, and that the interpreter is
+        -- still in a good state afterwards
+        explosiveThunk <- eval "1 `div` 0 :: Int"
+        (detonate explosiveThunk `catch` handleDivideByZero) @@?= "caught"
+        eval "2 + 2 :: Int"  @@?= "4"
+
+        -- make sure we catch exceptions in eval, and that the interpreter is
+        -- still in a good state afterwards
+        (eval "2 +" `catch` handleWontCompile) @@?= "caught"
+        eval "2 + 2 :: Int"  @@?= "4"
+
+        -- make sure we catch exceptions in setImports, and that the interpreter
+        -- is still in a good state afterwards
+        (importNonsense `catch` handleWontCompile) @@?= "caught"
+        eval "2 + 2 :: Int"  @@?= "4"
+
+        -- make sure we catch exceptions in loadModules
+        (loadNonsense `catch` handleWontCompile) @@?= "caught"
+        
+        -- loadModules resets the interpreter state, so we do _not_ expect that
+        -- the Prelude is still in scope after loadNonsense
+        fails (eval "2 + 2 :: Int") @@? "Prelude should not be in path"
+        
+        -- but we do expect the interpreter state to be in a good enough state
+        -- to evaluate builtins
+        (eval "[1..4]"  @@?= "[1,2,3,4]")
+
+        -- bring the prelude back into scope for the rest of the tests
+        setImports ["Prelude"]
+
+        -- make sure we catch exceptions in setTopLevelModules, and that the
+        -- interpreter is still in a good state afterwards
+        (setTopLevelNonsense1 `catch` handleNotAllowed) @@?= "caught"
+        eval "2 + 2 :: Int"  @@?= "4"
+        (setTopLevelNonsense2 `catch` handleNotAllowed) @@?= "caught"
+        eval "2 + 2 :: Int"  @@?= "4"
+    where detonate explosiveThunk = return $! explosiveThunk
+          importNonsense = do
+            setImports ["NonExistentModule"]
+            return "imported a non-existent module"
+          loadNonsense = do
+            loadModules ["NonExistentFile.hs"]
+            return "loaded a non-existent file"
+          setTopLevelNonsense1 = do
+            setTopLevelModules ["Prelude"]
+            return "looking inside the Prelude's internals"
+          setTopLevelNonsense2 = do
+            setTopLevelModules ["NonLoadedModule"]
+            return "looking inside a module which wasn't loaded"
+          handleDivideByZero DivideByZero = return "caught"
+          handleDivideByZero e = throwM e
+          handleWontCompile (WontCompile _) = return "caught"
+          handleWontCompile e = throwM e
+          handleNotAllowed (NotAllowed _) = return "caught"
+          handleNotAllowed e = throwM e
 
 #ifndef THREAD_SAFE_LINKER
 -- Prior to ghc-8.10, the linker wasn't thread-safe, and so running multiple
