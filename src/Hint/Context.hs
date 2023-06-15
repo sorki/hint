@@ -120,8 +120,8 @@ addPhantomModule mod_text =
        liftIO $ writeFile (pmFile pm) (mod_text $ pmName pm)
        --
        onState (\s -> s{activePhantoms = pm:activePhantoms s})
-       mayFail (do -- GHC.load will remove all the modules from scope, so first
-                   -- we save the context...
+       mayFail (do -- GHC.loadPhantomModule will remove all the modules from
+                   -- scope, so first we save the context...
                    (old_top, old_imps) <- runGhc getContext
                    --
                    runGhc $ GHC.addTarget t
