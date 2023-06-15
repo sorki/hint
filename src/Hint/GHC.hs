@@ -28,7 +28,6 @@ module Hint.GHC (
     errMsgSpan,
     fileTarget,
     guessTarget,
-    loadPhantomModule,
 #if MIN_VERSION_ghc(9,6,0)
     getPrintUnqual,
 #endif
@@ -136,8 +135,8 @@ import ConLike as X (ConLike(RealDataCon))
 {-------------------- Imports for Shims --------------------}
 
 import Control.Monad.IO.Class (MonadIO)
--- guessTarger
-import qualified GHC (LoadHowMuch(..), SuccessFlag, guessTarget, load)
+-- guessTarget
+import qualified GHC (guessTarget)
 
 #if MIN_VERSION_ghc(9,6,0)
 -- dynamicGhc
@@ -197,9 +196,6 @@ import qualified GHC.Driver.Phases as GHC (Phase(Cpp))
 import qualified GHC.Driver.Session as GHC (homeUnitId_)
 import qualified GHC.Types.SourceFile as GHC (HscSource(HsSrcFile))
 import qualified GHC.Types.Target as GHC (Target(Target), TargetId(TargetFile))
-
--- loadPhantomModule
-import qualified Language.Haskell.Syntax.Module.Name as GHC (ModuleName)
 
 -- getPrintUnqual
 import qualified GHC (getNamePprCtx)
@@ -261,8 +257,6 @@ import qualified GHC.Driver.Session as GHC (homeUnitId_)
 import qualified GHC.Types.SourceFile as GHC (HscSource(HsSrcFile))
 import qualified GHC.Types.Target as GHC (Target(Target), TargetId(TargetFile))
 
--- loadPhantomModule
-import qualified GHC.Unit.Module.Name as GHC (ModuleName)
 #elif MIN_VERSION_ghc(9,2,0)
 -- dynamicGhc
 import GHC.Platform.Ways (hostIsDynamic)
@@ -317,8 +311,6 @@ import qualified GHC.Driver.Phases as GHC (Phase(Cpp))
 import qualified GHC.Types.SourceFile as GHC (HscSource(HsSrcFile))
 import qualified GHC.Types.Target as GHC (Target(Target), TargetId(TargetFile))
 
--- loadPhantomModule
-import qualified GHC.Unit.Module.Name as GHC (ModuleName)
 #elif MIN_VERSION_ghc(9,0,0)
 -- dynamicGhc
 import GHC.Driver.Ways (hostIsDynamic)
@@ -363,8 +355,6 @@ import qualified GHC.Utils.Error as GHC (errMsgSpan)
 import qualified GHC.Driver.Phases as GHC (HscSource(HsSrcFile), Phase(Cpp))
 import qualified GHC.Driver.Types as GHC (Target(Target), TargetId(TargetFile))
 
--- loadPhantomModule
-import qualified GHC.Unit.Module.Name as GHC (ModuleName)
 #else
 -- dynamicGhc
 import qualified DynFlags as GHC (dynamicGhc)
@@ -414,8 +404,6 @@ import qualified ErrUtils as GHC (errMsgSpan)
 import qualified DriverPhases as GHC (HscSource(HsSrcFile), Phase(Cpp))
 import qualified HscTypes as GHC (Target(Target), TargetId(TargetFile))
 
--- loadPhantomModule
-import qualified Module as GHC (ModuleName)
 #endif
 
 {-------------------- Shims --------------------}
@@ -658,13 +646,6 @@ guessTarget :: GhcMonad m => String -> Maybe GHC.Phase -> m GHC.Target
 guessTarget t pM = GHC.guessTarget t Nothing pM
 #else
 guessTarget = GHC.guessTarget
-#endif
-
-loadPhantomModule :: GhcMonad m => GHC.ModuleName -> m GHC.SuccessFlag
-#if MIN_VERSION_ghc(9,4,0)
-loadPhantomModule _ = GHC.load GHC.LoadAllTargets
-#else
-loadPhantomModule m = GHC.load (GHC.LoadUpTo m)
 #endif
 
 -- getPrintUnqual
