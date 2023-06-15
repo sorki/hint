@@ -221,7 +221,7 @@ doLoad :: MonadInterpreter m => [String] -> m ()
 doLoad fs = mayFail $ do
                    targets <- mapM (\f->runGhc $ GHC.guessTarget f Nothing) fs
                    --
-                   res <- reinstallSupportModule (Just targets)
+                   res <- reinstallSupportModule targets
                    return $ guard (isSucceeded res) >> Just ()
 
 -- | Returns True if the module was interpreted.
@@ -385,14 +385,12 @@ reset = do -- clean up context
            cleanPhantomModules
            --
            -- Now, install a support module
-           res <- installSupportModule Nothing
+           res <- installSupportModule []
            mayFail (return $ guard (isSucceeded res) >> Just ())
 
 -- Load a phantom module with all the symbols from the prelude we need
-installSupportModule :: MonadInterpreter m => Maybe [GHC.Target] -> m GHC.SuccessFlag
-installSupportModule tM = do case tM of
-                               Nothing -> runGhc $ GHC.setTargets []
-                               Just ts -> runGhc $ GHC.setTargets ts
+installSupportModule :: MonadInterpreter m => [GHC.Target] -> m GHC.SuccessFlag
+installSupportModule ts = do runGhc $ GHC.setTargets ts
                              mod <- addPhantomModule support_module
                              onState (\st -> st{hintSupportModule = mod})
                              mod' <- findModule (pmName mod)
@@ -418,10 +416,10 @@ installSupportModule tM = do case tM of
 
 -- Call it when the support module is an active phantom module but has been
 -- unloaded as a side effect by GHC (e.g. by calling GHC.loadTargets)
-reinstallSupportModule :: Maybe [GHC.Target] -> MonadInterpreter m => m GHC.SuccessFlag
-reinstallSupportModule tM = do pm <- fromState hintSupportModule
+reinstallSupportModule :: [GHC.Target] -> MonadInterpreter m => m GHC.SuccessFlag
+reinstallSupportModule ts = do pm <- fromState hintSupportModule
                                removePhantomModule pm
-                               installSupportModule tM
+                               installSupportModule ts
 
 altStringName :: ModuleName -> String
 altStringName mod_name = "String_" ++ mod_name
