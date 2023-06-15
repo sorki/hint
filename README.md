@@ -9,15 +9,6 @@ You can choose which modules should be in scope while evaluating these
 expressions, you can browse the contents of those modules, and you can ask for
 the type of the identifiers you're browsing.
 
-It is, essentially, a huge subset of the GHC API wrapped in a simpler API.
-
-## Limitations
-
-It is possible to run the interpreter inside a thread, but on GHC 8.8 and
-below, you can't run two instances of the interpreter simultaneously.
-
-GHC must be installed on the system on which the compiled executable is running.
-
 ## Example
 
     {-# LANGUAGE LambdaCase, ScopedTypeVariables, TypeApplications #-}
@@ -35,7 +26,7 @@ GHC must be installed on the system on which the compiled executable is running.
     --
     -- >>> eval @[Int] "[1,2] ++ [3]"
     -- Right [1,2,3]
-    -- 
+    --
     -- Send values from your compiled program to your interpreted program by
     -- interpreting a function:
     --
@@ -71,3 +62,46 @@ GHC must be installed on the system on which the compiled executable is running.
 
 Check [example.hs](examples/example.hs) for a longer example (it must be run
 from hint's base directory).
+
+## Limitations
+
+Importing a module from the current package is not supported. It might look
+like it works on one day and then segfault the next day. You have been warned.
+
+To work around this limitation, move those modules to a separate package. Now
+the part of your code which calls hint and the code interpreted by hint can
+both import that module.
+
+It is not possible to exchange a value [whose type involves an implicit kind
+parameter](https://github.com/haskell-hint/hint/issues/159#issuecomment-1575629607).
+This includes type-level lists. To work around this limitation, [define a
+newtype wrapper which wraps the type you
+want](https://github.com/haskell-hint/hint/issues/159#issuecomment-1575640606).
+
+It is possible to run the interpreter inside a thread, but on GHC 8.8 and
+below, you can't run two instances of the interpreter simultaneously.
+
+GHC must be installed on the system on which the compiled executable is
+running. There is a workaround for this but [it's not trivial](https://github.com/haskell-hint/hint/issues/80#issuecomment-963109968).
+
+The packages used by the interpreted code must be installed in a package
+database, and hint needs to be told about that package database at runtime.
+
+The most common use case for package databases is for the interpreted code to
+have access to the same packages as the compiled code (but not compiled code
+itself). The easiest way to accomplish this is via a
+[GHC environment file](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/packages.html#package-environments),
+and the easiest way to generate a GHC environment file is
+[via cabal](https://cabal.readthedocs.io/en/3.4/cabal-project.html#cfg-field-write-ghc-environment-files).
+Compile your code using `cabal build --write-ghc-environment-files=always`;
+this will create a file named `.ghc.environment.<something>` in the current
+directory. At runtime, hint will look for that file in the current directory.
+
+For more advanced use cases, you can use
+[`unsafeRunInterpreterWithArgs`](https://hackage.haskell.org/package/hint/docs/Language-Haskell-Interpreter-Unsafe.html#v:unsafeRunInterpreterWithArgs)
+to pass arguments to the underlying ghc library, such as
+[`-package-db`](https://downloads.haskell.org/~ghc/latest/docs/users_guide/packages.html?highlight=package%20db#ghc-flag--package-db%20%E2%9F%A8file%E2%9F%A9)
+to specify a path to a package database, or
+[`-package-env`](https://downloads.haskell.org/~ghc/latest/docs/users_guide/packages.html?highlight=package%20db#ghc-flag--package-env%20%E2%9F%A8file%E2%9F%A9%7C%E2%9F%A8name%E2%9F%A9)
+to specify a path to a GHC environment file.
+

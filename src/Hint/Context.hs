@@ -120,12 +120,12 @@ addPhantomModule mod_text =
        liftIO $ writeFile (pmFile pm) (mod_text $ pmName pm)
        --
        onState (\s -> s{activePhantoms = pm:activePhantoms s})
-       mayFail (do -- GHC.load will remove all the modules from scope, so first
-                   -- we save the context...
+       mayFail (do -- GHC.load will remove all the modules from
+                   -- scope, so first we save the context...
                    (old_top, old_imps) <- runGhc getContext
                    --
                    runGhc $ GHC.addTarget t
-                   res <- runGhc $ GHC.loadPhantomModule m
+                   res <- runGhc $ GHC.load GHC.LoadAllTargets
                    --
                    if isSucceeded res
                      then do runGhc $ setContext old_top old_imps
@@ -187,7 +187,10 @@ isPhantomModule mn = do (as,zs) <- getPhantomModules
 
 -- | Tries to load all the requested modules from their source file.
 --   Modules my be indicated by their ModuleName (e.g. \"My.Module\") or
---   by the full path to its source file.
+--   by the full path to its source file. Note that in order to use code from
+--   that module, you also need to call 'setImports' (to use the exported types
+--   and definitions) or 'setTopLevelModules' (to also use the private types
+--   and definitions).
 --
 -- The interpreter is 'reset' both before loading the modules and in the event
 -- of an error.
@@ -215,11 +218,9 @@ loadModules fs = do -- first, unload everything, and do some clean-up
                     doLoad fs `catchIE` (\e -> reset >> throwM e)
 
 doLoad :: MonadInterpreter m => [String] -> m ()
-doLoad fs = mayFail $ do
-                   targets <- mapM (\f->runGhc $ GHC.guessTarget f Nothing) fs
-                   --
-                   res <- reinstallSupportModule (Just targets)
-                   return $ guard (isSucceeded res) >> Just ()
+doLoad fs = do targets <- mapM (\f->runGhc $ GHC.guessTarget f Nothing) fs
+               --
+               reinstallSupportModule targets
 
 -- | Returns True if the module was interpreted.
 isModuleInterpreted :: MonadInterpreter m => ModuleName -> m Bool
@@ -267,7 +268,11 @@ setTopLevelModules ms =
        (_, old_imports) <- runGhc getContext
        runGhc $ setContext ms_mods old_imports
 
--- | Sets the modules whose exports must be in context.
+-- | Sets the modules whose exports must be in context. These can be modules
+-- previously loaded with 'loadModules', or modules from packages which hint is
+-- aware of. This includes package databases specified to
+-- 'unsafeRunInterpreterWithArgs' by the @-package-db=...@ parameter, and
+-- packages specified by a ghc environment file created by @cabal build --write-ghc-environment-files=always@.
 --
 --   Warning: 'setImports', 'setImportsQ', and 'setImportsF' are mutually exclusive.
 --   If you have a list of modules to be used qualified and another list
@@ -277,8 +282,7 @@ setTopLevelModules ms =
 setImports :: MonadInterpreter m => [ModuleName] -> m ()
 setImports ms = setImportsF $ map (\m -> ModuleImport m NotQualified NoImportList) ms
 
--- | Sets the modules whose exports must be in context; some
---   of them may be qualified. E.g.:
+-- | A variant of 'setImports' where modules them may be qualified. e.g.:
 --
 --   @setImportsQ [("Prelude", Nothing), ("Data.Map", Just "M")]@.
 --
@@ -286,8 +290,7 @@ setImports ms = setImportsF $ map (\m -> ModuleImport m NotQualified NoImportLis
 setImportsQ :: MonadInterpreter m => [(ModuleName, Maybe String)] -> m ()
 setImportsQ ms = setImportsF $ map (\(m,q) -> ModuleImport m (maybe NotQualified (QualifiedAs . Just) q) NoImportList) ms
 
--- | Sets the modules whose exports must be in context; some
---   may be qualified or have imports lists. E.g.:
+-- | A variant of 'setImportsQ' where modules may have an explicit import list. e.g.:
 --
 --   @setImportsF [ModuleImport "Prelude" NotQualified NoImportList, ModuleImport "Data.Text" (QualifiedAs $ Just "Text") (HidingList ["pack"])]@
 
@@ -380,27 +383,15 @@ reset = do -- clean up context
            cleanPhantomModules
            --
            -- Now, install a support module
-           res <- installSupportModule Nothing
-           mayFail (return $ guard (isSucceeded res) >> Just ())
+           installSupportModule []
 
 -- Load a phantom module with all the symbols from the prelude we need
-installSupportModule :: MonadInterpreter m => Maybe [GHC.Target] -> m GHC.SuccessFlag
-installSupportModule tM = do mod <- addPhantomModule support_module
+installSupportModule :: MonadInterpreter m => [GHC.Target] -> m ()
+installSupportModule ts = do runGhc $ GHC.setTargets ts
+                             mod <- addPhantomModule support_module
                              onState (\st -> st{hintSupportModule = mod})
-                             case tM of
-                                Nothing -> do
-                                  mod' <- findModule (pmName mod)
-                                  runGhc $ setContext [mod'] []
-                                  return GHC.Succeeded
-                                Just ts -> do
-                                  runGhc $ GHC.setTargets ts
-                                  df <- runGhc GHC.getSessionDynFlags
-                                  let t = GHC.fileTarget df (pmFile mod)
-                                  runGhc $ GHC.addTarget t
-                                  res <- runGhc $ GHC.load GHC.LoadAllTargets
-                                  mod' <- findModule (pmName mod)
-                                  runGhc $ setContext [mod'] []
-                                  return res
+                             mod' <- findModule (pmName mod)
+                             runGhc $ setContext [mod'] []
     --
     where support_module m = unlines [
                                "module " ++ m ++ "( ",
@@ -421,10 +412,10 @@ installSupportModule tM = do mod <- addPhantomModule support_module
 
 -- Call it when the support module is an active phantom module but has been
 -- unloaded as a side effect by GHC (e.g. by calling GHC.loadTargets)
-reinstallSupportModule :: Maybe [GHC.Target] -> MonadInterpreter m => m GHC.SuccessFlag
-reinstallSupportModule tM = do pm <- fromState hintSupportModule
+reinstallSupportModule :: [GHC.Target] -> MonadInterpreter m => m ()
+reinstallSupportModule ts = do pm <- fromState hintSupportModule
                                removePhantomModule pm
-                               installSupportModule tM
+                               installSupportModule ts
 
 altStringName :: ModuleName -> String
 altStringName mod_name = "String_" ++ mod_name

@@ -209,11 +209,62 @@ test_search_path_dot =
 test_catch :: TestCase
 test_catch = TestCase "catch" [] $ do
         setImports ["Prelude"]
-        succeeds (action `catch` handler) @@? "catch failed"
-    where handler DivideByZero = return "catched"
-          handler e = throwM e
-          action = do s <- eval "1 `div` 0 :: Int"
-                      return $! s
+
+        -- make sure we catch exceptions in return, and that the interpreter is
+        -- still in a good state afterwards
+        explosiveThunk <- eval "1 `div` 0 :: Int"
+        (detonate explosiveThunk `catch` handleDivideByZero) @@?= "caught"
+        eval "2 + 2 :: Int"  @@?= "4"
+
+        -- make sure we catch exceptions in eval, and that the interpreter is
+        -- still in a good state afterwards
+        (eval "2 +" `catch` handleWontCompile) @@?= "caught"
+        eval "2 + 2 :: Int"  @@?= "4"
+
+        -- make sure we catch exceptions in setImports, and that the interpreter
+        -- is still in a good state afterwards
+        (importNonsense `catch` handleWontCompile) @@?= "caught"
+        eval "2 + 2 :: Int"  @@?= "4"
+
+        -- make sure we catch exceptions in loadModules
+        (loadNonsense `catch` handleWontCompile) @@?= "caught"
+        
+        -- loadModules resets the interpreter state, so we do _not_ expect that
+        -- the Prelude is still in scope after loadNonsense
+        fails (eval "2 + 2 :: Int") @@? "Prelude should not be in path"
+        
+        -- but we do expect the interpreter state to be in a good enough state
+        -- to evaluate builtins
+        (eval "[1..4]"  @@?= "[1,2,3,4]")
+
+        -- bring the prelude back into scope for the rest of the tests
+        setImports ["Prelude"]
+
+        -- make sure we catch exceptions in setTopLevelModules, and that the
+        -- interpreter is still in a good state afterwards
+        (setTopLevelNonsense1 `catch` handleNotAllowed) @@?= "caught"
+        eval "2 + 2 :: Int"  @@?= "4"
+        (setTopLevelNonsense2 `catch` handleNotAllowed) @@?= "caught"
+        eval "2 + 2 :: Int"  @@?= "4"
+    where detonate explosiveThunk = return $! explosiveThunk
+          importNonsense = do
+            setImports ["NonExistentModule"]
+            return "imported a non-existent module"
+          loadNonsense = do
+            loadModules ["NonExistentFile.hs"]
+            return "loaded a non-existent file"
+          setTopLevelNonsense1 = do
+            setTopLevelModules ["Prelude"]
+            return "looking inside the Prelude's internals"
+          setTopLevelNonsense2 = do
+            setTopLevelModules ["NonLoadedModule"]
+            return "looking inside a module which wasn't loaded"
+          handleDivideByZero DivideByZero = return "caught"
+          handleDivideByZero e = throwM e
+          handleWontCompile (WontCompile _) = return "caught"
+          handleWontCompile e = throwM e
+          handleNotAllowed (NotAllowed _) = return "caught"
+          handleNotAllowed e = throwM e
 
 #ifndef THREAD_SAFE_LINKER
 -- Prior to ghc-8.10, the linker wasn't thread-safe, and so running multiple
@@ -326,8 +377,7 @@ test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
         unsetEnv "GHC_ENVIRONMENT"
 
         wrapInterp (unsafeRunInterpreterWithArgs ghc_args) $ do
-          --succeeds (setImports [mod]) @@? "module from package-db must be visible"
-          setImports [mod]
+          succeeds (setImports [mod]) @@? "module from package-db must be visible"
     --
     where pkg      = "my-package"
           dir      = pkg
@@ -354,6 +404,55 @@ test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
                             -- that it cannot run if that variable is set.
                             setEnv (filter ((/= "GHC_PACKAGE_PATH") . fst) env)
                           $ proc "cabal" ["build"]
+
+test_ghc_environment_file :: IOTestCase
+test_ghc_environment_file = IOTestCase "ghc_environment_file" [dir] $ \wrapInterp -> do
+        setup
+
+        -- stack sets GHC_ENVIRONMENT to a file which pins down the versions of
+        -- all the packages we can load, and since it does not list my-package,
+        -- we cannot load it.
+        unsetEnv "GHC_ENVIRONMENT"
+
+        wrapInterp runInterpreter $ do
+          fails (setImports ["Acme.Dont"]) @@? "acme-dont should not be in path"
+
+        -- in dir, there is a file .ghc.environment.<something> which lists the
+        -- acme-dont package because it is a dependency of my-package. hint
+        -- should detect that file and make containers available to the
+        -- interpreted code.
+        withCurrentDirectory dir $ do
+          wrapInterp runInterpreter $ do
+            succeeds (setImports ["Acme.Dont"]) @@? "acme-dont should be in path"
+    --
+    where pkg      = "my-package"
+          dir      = pkg
+          mod_file = dir </> mod <.> "hs"
+          mod      = "MyModule"
+          cabal_file = dir </> pkg <.> "cabal"
+          setup    = do createDirectory dir
+                        writeFile cabal_file $ unlines
+                          [ "cabal-version: 2.4"
+                          , "name: " ++ pkg
+                          , "version: 0.1.0.0"
+                          , ""
+                          , "library"
+                          , "  exposed-modules: " ++ mod
+                          , "  build-depends: acme-dont"
+                          ]
+                        writeFile mod_file $ unlines
+                          [ "{-# LANGUAGE NoImplicitPrelude #-}"
+                          , "module " ++ mod ++ " where"
+                          ]
+                        env <- getEnvironment
+                        runProcess_
+                          $ proc "cabal" ["update"]
+                        runProcess_
+                          $ setWorkingDir dir
+                          $ -- stack sets GHC_PACKAGE_PATH, but cabal complains
+                            -- that it cannot run if that variable is set.
+                            setEnv (filter ((/= "GHC_PACKAGE_PATH") . fst) env)
+                          $ proc "cabal" ["build", "--write-ghc-environment-files=always"]
 
 -- earlier versions of hint were accidentally overwriting the signal handlers
 -- for ^C and others.
@@ -422,6 +521,7 @@ tests = [test_reload_modified
 ioTests :: [IOTestCase]
 ioTests = [test_signal_handlers
           ,test_package_db
+          ,test_ghc_environment_file
           ]
 
 main :: IO ()
