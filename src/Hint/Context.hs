@@ -108,16 +108,13 @@ setContext ms ds =
 setContextModules :: GHC.GhcMonad m => [GHC.Module] -> [GHC.Module] -> m ()
 setContextModules as = setContext as . map (GHC.simpleImportDecl . GHC.moduleName)
 
-fileTarget :: FilePath -> GHC.Target
-fileTarget f = GHC.Target (GHC.TargetFile f $ Just next_phase) True Nothing
-    where next_phase = GHC.Cpp GHC.HsSrcFile
-
 addPhantomModule :: MonadInterpreter m
                  => (ModuleName -> ModuleText)
                  -> m PhantomModule
 addPhantomModule mod_text =
     do pm <- newPhantomModule
-       let t = fileTarget (pmFile pm)
+       df <- runGhc GHC.getSessionDynFlags
+       let t = GHC.fileTarget df (pmFile pm)
            m = GHC.mkModuleName (pmName pm)
        --
        liftIO $ writeFile (pmFile pm) (mod_text $ pmName pm)
@@ -128,7 +125,7 @@ addPhantomModule mod_text =
                    (old_top, old_imps) <- runGhc getContext
                    --
                    runGhc $ GHC.addTarget t
-                   res <- runGhc $ GHC.load (GHC.LoadUpTo m)
+                   res <- runGhc $ GHC.loadPhantomModule m
                    --
                    if isSucceeded res
                      then do runGhc $ setContext old_top old_imps
@@ -167,7 +164,8 @@ removePhantomModule pm =
              else return True
        --
        let file_name = pmFile pm
-       runGhc $ GHC.removeTarget (GHC.targetId $ fileTarget file_name)
+       runGhc $ do df <- GHC.getSessionDynFlags
+                   GHC.removeTarget (GHC.targetId $ GHC.fileTarget df file_name)
        --
        onState (\s -> s{activePhantoms = filter (pm /=) $ activePhantoms s})
        --
@@ -220,10 +218,7 @@ doLoad :: MonadInterpreter m => [String] -> m ()
 doLoad fs = mayFail $ do
                    targets <- mapM (\f->runGhc $ GHC.guessTarget f Nothing) fs
                    --
-                   runGhc $ GHC.setTargets targets
-                   res <- runGhc $ GHC.load GHC.LoadAllTargets
-                   -- loading the targets removes the support module
-                   reinstallSupportModule
+                   res <- reinstallSupportModule (Just targets)
                    return $ guard (isSucceeded res) >> Just ()
 
 -- | Returns True if the module was interpreted.
@@ -385,14 +380,27 @@ reset = do -- clean up context
            cleanPhantomModules
            --
            -- Now, install a support module
-           installSupportModule
+           res <- installSupportModule Nothing
+           mayFail (return $ guard (isSucceeded res) >> Just ())
 
 -- Load a phantom module with all the symbols from the prelude we need
-installSupportModule :: MonadInterpreter m => m ()
-installSupportModule = do mod <- addPhantomModule support_module
-                          onState (\st -> st{hintSupportModule = mod})
-                          mod' <- findModule (pmName mod)
-                          runGhc $ setContext [mod'] []
+installSupportModule :: MonadInterpreter m => Maybe [GHC.Target] -> m GHC.SuccessFlag
+installSupportModule tM = do mod <- addPhantomModule support_module
+                             onState (\st -> st{hintSupportModule = mod})
+                             case tM of
+                                Nothing -> do
+                                  mod' <- findModule (pmName mod)
+                                  runGhc $ setContext [mod'] []
+                                  return GHC.Succeeded
+                                Just ts -> do
+                                  runGhc $ GHC.setTargets ts
+                                  df <- runGhc GHC.getSessionDynFlags
+                                  let t = GHC.fileTarget df (pmFile mod)
+                                  runGhc $ GHC.addTarget t
+                                  res <- runGhc $ GHC.load GHC.LoadAllTargets
+                                  mod' <- findModule (pmName mod)
+                                  runGhc $ setContext [mod'] []
+                                  return res
     --
     where support_module m = unlines [
                                "module " ++ m ++ "( ",
@@ -413,10 +421,10 @@ installSupportModule = do mod <- addPhantomModule support_module
 
 -- Call it when the support module is an active phantom module but has been
 -- unloaded as a side effect by GHC (e.g. by calling GHC.loadTargets)
-reinstallSupportModule :: MonadInterpreter m => m ()
-reinstallSupportModule = do pm <- fromState hintSupportModule
-                            removePhantomModule pm
-                            installSupportModule
+reinstallSupportModule :: Maybe [GHC.Target] -> MonadInterpreter m => m GHC.SuccessFlag
+reinstallSupportModule tM = do pm <- fromState hintSupportModule
+                               removePhantomModule pm
+                               installSupportModule tM
 
 altStringName :: ModuleName -> String
 altStringName mod_name = "String_" ++ mod_name

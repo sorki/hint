@@ -3,10 +3,12 @@ module Hint.GHC (
     dynamicGhc,
     Message,
     Logger,
+    WarnReason(NoReason),
     initLogger,
     putLogMsg,
     pushLogHook,
     modifyLogger,
+    mkLogAction,
     UnitState,
     emptyUnitState,
     showSDocForUser,
@@ -21,11 +23,19 @@ module Hint.GHC (
     addWay,
     setBackendToInterpreter,
     parseDynamicFlags,
+    pprTypeForUser,
+    errMsgSpan,
+    fileTarget,
+    guessTarget,
+    loadPhantomModule,
     -- * Re-exports
     module X,
 ) where
 
+import Data.IORef (IORef, modifyIORef)
+
 import GHC as X hiding (Phase, GhcT, parseDynamicFlags, runGhcT, showGhcException
+                       , guessTarget
 #if MIN_VERSION_ghc(9,2,0)
                        , Logger
                        , modifyLogger
@@ -34,17 +44,22 @@ import GHC as X hiding (Phase, GhcT, parseDynamicFlags, runGhcT, showGhcExceptio
                        )
 import Control.Monad.Ghc as X (GhcT, runGhcT)
 
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Types.SourceError as X (SourceError, srcErrorMessages)
+
+import GHC.Driver.Ppr as X (showSDoc, showSDocUnsafe)
+
+import GHC.Types.SourceFile as X (HscSource(HsSrcFile))
+
+import GHC.Platform.Ways as X (Way (..))
+#elif MIN_VERSION_ghc(9,2,0)
 import GHC.Types.SourceError as X (SourceError, srcErrorMessages)
 
 import GHC.Driver.Ppr as X (showSDoc)
 
 import GHC.Types.SourceFile as X (HscSource(HsSrcFile))
 
-import GHC.Utils.Logger as X (LogAction)
 import GHC.Platform.Ways as X (Way (..))
-
-import GHC.Types.TyThing.Ppr as X (pprTypeForUser)
 #elif MIN_VERSION_ghc(9,0,0)
 import GHC.Driver.Types as X (SourceError, srcErrorMessages, GhcApiError)
 
@@ -52,10 +67,8 @@ import GHC.Utils.Outputable as X (showSDoc)
 
 import GHC.Driver.Phases as X (HscSource(HsSrcFile))
 
-import GHC.Driver.Session as X (LogAction, addWay')
+import GHC.Driver.Session as X (addWay')
 import GHC.Driver.Ways as X (Way (..))
-
-import GHC.Core.Ppr.TyThing as X (pprTypeForUser)
 #else
 import HscTypes as X (SourceError, srcErrorMessages, GhcApiError)
 
@@ -63,16 +76,27 @@ import Outputable as X (showSDoc)
 
 import DriverPhases as X (HscSource(HsSrcFile))
 
-import DynFlags as X (LogAction, addWay', Way(..))
-
-import PprTyThing as X (pprTypeForUser)
+import DynFlags as X (addWay', Way(..))
 #endif
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,4,0)
 import GHC.Utils.Outputable as X (PprStyle, SDoc, Outputable(ppr),
-                                  withPprStyle, defaultErrStyle, vcat)
+                                  withPprStyle, vcat)
+import GHC.Driver.Phases as X (Phase(Cpp))
+import GHC.Data.StringBuffer as X (stringToStringBuffer)
+import GHC.Parser.Lexer as X (P(..), ParseResult(..))
+import GHC.Parser as X (parseStmt, parseType)
+import GHC.Data.FastString as X (fsLit)
 
-import GHC.Utils.Error as X (mkLocMessage, errMsgSpan)
+import GHC.Driver.Session as X (xFlags, xopt, FlagSpec(..))
+
+import GHC.Types.Error as X (diagnosticMessage, getMessages)
+import GHC.Types.SrcLoc as X (mkRealSrcLoc)
+
+import GHC.Core.ConLike as X (ConLike(RealDataCon))
+#elif MIN_VERSION_ghc(9,0,0)
+import GHC.Utils.Outputable as X (PprStyle, SDoc, Outputable(ppr),
+                                  withPprStyle, vcat)
 
 import GHC.Driver.Phases as X (Phase(Cpp))
 import GHC.Data.StringBuffer as X (stringToStringBuffer)
@@ -80,18 +104,17 @@ import GHC.Parser.Lexer as X (P(..), ParseResult(..))
 import GHC.Parser as X (parseStmt, parseType)
 import GHC.Data.FastString as X (fsLit)
 
-import GHC.Driver.Session as X (xFlags, xopt, FlagSpec(..), WarnReason(NoReason))
+import GHC.Driver.Session as X (xFlags, xopt, FlagSpec(..))
+import GHC.Driver.Session (WarnReason(NoReason))
 
-import GHC.Types.SrcLoc as X (combineSrcSpans, mkRealSrcLoc)
+import GHC.Types.SrcLoc as X (mkRealSrcLoc)
 
 import GHC.Core.ConLike as X (ConLike(RealDataCon))
 #else
 import HscTypes as X (mgModSummaries)
 
 import Outputable as X (PprStyle, SDoc, Outputable(ppr),
-                        withPprStyle, defaultErrStyle, vcat)
-
-import ErrUtils as X (mkLocMessage, errMsgSpan)
+                        withPprStyle, vcat)
 
 import DriverPhases as X (Phase(Cpp))
 import StringBuffer as X (stringToStringBuffer)
@@ -99,9 +122,9 @@ import Lexer as X (P(..), ParseResult(..), mkPState)
 import Parser as X (parseStmt, parseType)
 import FastString as X (fsLit)
 
-import DynFlags as X (xFlags, xopt, FlagSpec(..), WarnReason(NoReason))
+import DynFlags as X (xFlags, xopt, FlagSpec(..))
 
-import SrcLoc as X (combineSrcSpans, mkRealSrcLoc)
+import SrcLoc as X (mkRealSrcLoc)
 
 import ConLike as X (ConLike(RealDataCon))
 #endif
@@ -109,14 +132,80 @@ import ConLike as X (ConLike(RealDataCon))
 {-------------------- Imports for Shims --------------------}
 
 import Control.Monad.IO.Class (MonadIO)
+-- guessTarger
+import qualified GHC (LoadHowMuch(..), SuccessFlag, guessTarget, load)
 
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
 -- dynamicGhc
 import GHC.Platform.Ways (hostIsDynamic)
 
+-- Message
+import qualified GHC.Utils.Error as GHC (mkLocMessage)
+
 -- Logger
-import qualified GHC.Utils.Logger as GHC (Logger, initLogger, putLogMsg, pushLogHook)
+import qualified GHC.Utils.Logger as GHC
+  (LogAction, Logger, initLogger, logFlags, log_default_user_context, putLogMsg, pushLogHook)
 import qualified GHC.Driver.Monad as GHC (modifyLogger)
+import qualified GHC.Types.Error as GHC
+  (DiagnosticReason(ErrorWithoutFlag), MessageClass(MCDiagnostic))
+import qualified GHC.Utils.Outputable as GHC (renderWithContext)
+
+-- UnitState
+import qualified GHC.Unit.State as GHC (UnitState, emptyUnitState)
+
+-- showSDocForUser
+import qualified GHC.Driver.Ppr as GHC (showSDocForUser)
+
+-- PState
+import qualified GHC.Parser.Lexer as GHC (PState, ParserOpts, initParserState)
+import GHC.Data.StringBuffer (StringBuffer)
+import qualified GHC.Driver.Config.Parser as GHC (initParserOpts)
+
+-- ErrorMessages
+import qualified GHC.Driver.Errors.Types as GHC (GhcMessage(GhcPsMessage), ErrorMessages)
+import qualified GHC.Parser.Lexer as GHC (getPsErrorMessages)
+import qualified GHC.Types.Error as GHC
+  (diagnosticMessage, errMsgDiagnostic, getMessages, unDecorated)
+import GHC.Data.Bag (bagToList)
+
+-- showGhcException
+import qualified GHC (showGhcException)
+import qualified GHC.Utils.Outputable as GHC (SDocContext, defaultSDocContext)
+
+-- addWay
+import qualified GHC.Driver.Session as DynFlags (targetWays_)
+import qualified Data.Set as Set
+
+-- parseDynamicFlags
+import qualified GHC (parseDynamicFlags)
+import GHC.Driver.CmdLine (Warn)
+
+-- pprTypeForUser
+import qualified GHC.Core.TyCo.Ppr as GHC (pprSigmaType)
+
+-- errMsgSpan
+import qualified GHC.Types.Error as GHC (Messages, errMsgSpan)
+import qualified GHC.Types.SrcLoc as GHC (combineSrcSpans)
+
+-- fileTarget
+import qualified GHC.Driver.Phases as GHC (Phase(Cpp))
+import qualified GHC.Driver.Session as GHC (homeUnitId_)
+import qualified GHC.Types.SourceFile as GHC (HscSource(HsSrcFile))
+import qualified GHC.Types.Target as GHC (Target(Target), TargetId(TargetFile))
+
+-- loadPhantomModule
+import qualified GHC.Unit.Module.Name as GHC (ModuleName)
+#elif MIN_VERSION_ghc(9,2,0)
+-- dynamicGhc
+import GHC.Platform.Ways (hostIsDynamic)
+
+-- Message
+import qualified GHC.Utils.Error as GHC (mkLocMessage)
+
+-- Logger
+import qualified GHC.Utils.Logger as GHC (LogAction, Logger, initLogger, putLogMsg, pushLogHook)
+import qualified GHC.Driver.Monad as GHC (modifyLogger)
+import qualified GHC.Driver.Ppr as GHC (showSDoc)
 
 -- UnitState
 import qualified GHC.Unit.State as GHC (UnitState, emptyUnitState)
@@ -146,16 +235,33 @@ import qualified Data.Set as Set
 -- parseDynamicFlags
 import qualified GHC (parseDynamicFlags)
 import GHC.Driver.CmdLine (Warn)
+
+-- pprTypeForUser
+import qualified GHC.Types.TyThing.Ppr as GHC (pprTypeForUser)
+
+-- errMsgSpan
+import qualified GHC.Data.Bag as GHC (Bag)
+import qualified GHC.Types.Error as GHC (MsgEnvelope, errMsgSpan)
+import qualified GHC.Types.SrcLoc as GHC (combineSrcSpans)
+
+-- fileTarget
+import qualified GHC.Driver.Phases as GHC (Phase(Cpp))
+import qualified GHC.Types.SourceFile as GHC (HscSource(HsSrcFile))
+import qualified GHC.Types.Target as GHC (Target(Target), TargetId(TargetFile))
+
+-- loadPhantomModule
+import qualified GHC.Unit.Module.Name as GHC (ModuleName)
 #elif MIN_VERSION_ghc(9,0,0)
 -- dynamicGhc
 import GHC.Driver.Ways (hostIsDynamic)
 
 -- Message
-import qualified GHC.Utils.Error as GHC (MsgDoc)
+import qualified GHC.Utils.Error as GHC (MsgDoc, mkLocMessage)
 
 -- Logger
-import qualified GHC.Driver.Session as GHC (defaultLogAction)
+import qualified GHC.Driver.Session as GHC (LogAction, defaultLogAction)
 import qualified GHC.Driver.Session as DynFlags (log_action)
+import qualified GHC.Utils.Outputable as GHC (showSDoc)
 
 -- showSDocForUser
 import qualified GHC.Utils.Outputable as GHC (showSDocForUser)
@@ -177,16 +283,32 @@ import qualified GHC.Driver.Session as GHC (addWay')
 -- parseDynamicFlags
 import qualified GHC (parseDynamicFlags)
 import GHC.Driver.CmdLine (Warn)
+
+-- pprTypeForUser
+import qualified GHC.Core.Ppr.TyThing as GHC (pprTypeForUser)
+
+-- errMsgSpan
+import qualified GHC.Types.SrcLoc as GHC (combineSrcSpans)
+import qualified GHC.Utils.Error as GHC (errMsgSpan)
+
+-- fileTarget
+import qualified GHC.Driver.Phases as GHC (HscSource(HsSrcFile), Phase(Cpp))
+import qualified GHC.Driver.Types as GHC (Target(Target), TargetId(TargetFile))
+
+-- loadPhantomModule
+import qualified GHC.Unit.Module.Name as GHC (ModuleName)
 #else
 -- dynamicGhc
 import qualified DynFlags as GHC (dynamicGhc)
 
 -- Message
-import qualified ErrUtils as GHC (MsgDoc)
+import qualified ErrUtils as GHC (MsgDoc, mkLocMessage)
 
 -- Logger
-import qualified DynFlags as GHC (defaultLogAction)
+import qualified DynFlags as GHC (LogAction, defaultLogAction)
 import qualified DynFlags (log_action)
+import DynFlags (WarnReason(NoReason))
+import qualified Outputable as GHC (defaultErrStyle, renderWithStyle)
 
 -- showSDocForUser
 import qualified Outputable as GHC (showSDocForUser)
@@ -212,6 +334,20 @@ import qualified DynFlags as GHC (addWay')
 -- parseDynamicFlags
 import qualified GHC (parseDynamicFlags)
 import CmdLineParser (Warn)
+
+-- pprTypeForUser
+import qualified PprTyThing as GHC (pprTypeForUser)
+
+-- errMsgSpan
+import qualified SrcLoc as GHC (combineSrcSpans)
+import qualified ErrUtils as GHC (errMsgSpan)
+
+-- fileTarget
+import qualified DriverPhases as GHC (HscSource(HsSrcFile), Phase(Cpp))
+import qualified HscTypes as GHC (Target(Target), TargetId(TargetFile))
+
+-- loadPhantomModule
+import qualified Module as GHC (ModuleName)
 #endif
 
 {-------------------- Shims --------------------}
@@ -233,17 +369,33 @@ type Message = GHC.MsgDoc
 
 -- Logger
 initLogger :: IO Logger
-putLogMsg :: Logger -> LogAction
-pushLogHook :: (LogAction -> LogAction) -> Logger -> Logger
+putLogMsg :: Logger -> DynFlags -> WarnReason -> Severity -> SrcSpan -> SDoc -> IO ()
+pushLogHook :: (GHC.LogAction -> GHC.LogAction) -> Logger -> Logger
 modifyLogger :: GhcMonad m => (Logger -> Logger) -> m ()
-#if MIN_VERSION_ghc(9,2,0)
+mkLogAction :: (String -> a) -> IORef [a] -> GHC.LogAction
+#if MIN_VERSION_ghc(9,4,0)
+data WarnReason = NoReason
+type Logger = GHC.Logger
+initLogger = GHC.initLogger
+putLogMsg logger _df _wn sev = GHC.putLogMsg logger (GHC.logFlags logger) (GHC.MCDiagnostic sev GHC.ErrorWithoutFlag)
+pushLogHook = GHC.pushLogHook
+modifyLogger = GHC.modifyLogger
+mkLogAction f r = \lf mc src msg ->
+    let renderErrMsg = GHC.renderWithContext (GHC.log_default_user_context lf)
+        errorEntry   = f (renderErrMsg (GHC.mkLocMessage mc src msg))
+    in modifyIORef r (errorEntry :)
+#elif MIN_VERSION_ghc(9,2,0)
 type Logger = GHC.Logger
 initLogger = GHC.initLogger
 putLogMsg = GHC.putLogMsg
 pushLogHook = GHC.pushLogHook
 modifyLogger = GHC.modifyLogger
-#else
-type Logger = LogAction
+mkLogAction f r = \df _ sev src msg ->
+    let renderErrMsg = GHC.showSDoc df
+        errorEntry   = f (renderErrMsg (GHC.mkLocMessage sev src msg))
+    in modifyIORef r (errorEntry :)
+#elif MIN_VERSION_ghc(9,0,0)
+type Logger = GHC.LogAction
 initLogger = pure GHC.defaultLogAction
 putLogMsg = id
 pushLogHook = id
@@ -251,6 +403,23 @@ modifyLogger f = do
   df <- getSessionDynFlags
   _ <- setSessionDynFlags df{log_action = f $ DynFlags.log_action df}
   return ()
+mkLogAction f r = \df _ sev src msg ->
+    let renderErrMsg = GHC.showSDoc df
+        errorEntry   = f (renderErrMsg (GHC.mkLocMessage sev src msg))
+    in modifyIORef r (errorEntry :)
+#else
+type Logger = GHC.LogAction
+initLogger = pure GHC.defaultLogAction
+putLogMsg l = \df wr sev src msg -> l df wr sev src (GHC.defaultErrStyle df) msg
+pushLogHook = id
+modifyLogger f = do
+  df <- getSessionDynFlags
+  _ <- setSessionDynFlags df{log_action = f $ DynFlags.log_action df}
+  return ()
+mkLogAction f r = \df _ sev src style msg ->
+    let renderErrMsg s = GHC.renderWithStyle df s style
+        errorEntry   = f (renderErrMsg (GHC.mkLocMessage sev src msg))
+    in modifyIORef r (errorEntry :)
 #endif
 
 -- UnitState
@@ -274,7 +443,12 @@ showSDocForUser df _ = GHC.showSDocForUser df
 -- PState
 mkParserOpts :: DynFlags -> ParserOpts
 initParserState :: ParserOpts -> StringBuffer -> RealSrcLoc -> GHC.PState
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+type ParserOpts = GHC.ParserOpts
+mkParserOpts = GHC.initParserOpts
+
+initParserState = GHC.initParserState
+#elif MIN_VERSION_ghc(9,2,0)
 type ParserOpts = GHC.ParserOpts
 mkParserOpts =
   -- adapted from
@@ -298,7 +472,12 @@ initParserState = GHC.mkPStatePure
 -- ErrorMessages
 getErrorMessages :: GHC.PState -> DynFlags -> GHC.ErrorMessages
 pprErrorMessages :: GHC.ErrorMessages -> [SDoc]
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+getErrorMessages pstate _ = fmap GHC.GhcPsMessage $ GHC.getPsErrorMessages pstate
+pprErrorMessages = bagToList . fmap pprErrorMessage . GHC.getMessages
+  where
+    pprErrorMessage = vcat . GHC.unDecorated . GHC.diagnosticMessage . GHC.errMsgDiagnostic
+#elif MIN_VERSION_ghc(9,2,0)
 getErrorMessages pstate _ = fmap GHC.pprError $ GHC.getErrorMessages pstate
 pprErrorMessages = bagToList . fmap pprErrorMessage
   where
@@ -354,4 +533,46 @@ parseDynamicFlags :: MonadIO m => Logger -> DynFlags -> [Located String] -> m (D
 parseDynamicFlags = GHC.parseDynamicFlags
 #else
 parseDynamicFlags _ = GHC.parseDynamicFlags
+#endif
+
+pprTypeForUser :: Type -> SDoc
+#if MIN_VERSION_ghc(9,4,0)
+pprTypeForUser = GHC.pprSigmaType
+#else
+pprTypeForUser = GHC.pprTypeForUser
+#endif
+
+#if MIN_VERSION_ghc(9,4,0)
+errMsgSpan :: GHC.Messages e -> SrcSpan
+errMsgSpan msgs = foldr (GHC.combineSrcSpans . GHC.errMsgSpan) X.noSrcSpan (GHC.getMessages msgs)
+#elif MIN_VERSION_ghc(9,2,0)
+errMsgSpan :: GHC.Bag (GHC.MsgEnvelope e) -> SrcSpan
+errMsgSpan = foldr (GHC.combineSrcSpans . GHC.errMsgSpan) X.noSrcSpan
+#else
+errMsgSpan :: GHC.ErrorMessages -> SrcSpan
+errMsgSpan = foldr (GHC.combineSrcSpans . GHC.errMsgSpan) X.noSrcSpan
+#endif
+
+fileTarget :: DynFlags -> FilePath -> GHC.Target
+#if MIN_VERSION_ghc(9,4,0)
+fileTarget dflags f = GHC.Target (GHC.TargetFile f $ Just next_phase) True uid Nothing
+    where next_phase = GHC.Cpp GHC.HsSrcFile
+          uid = GHC.homeUnitId_ dflags
+#else
+fileTarget _ f = GHC.Target (GHC.TargetFile f $ Just next_phase) True Nothing
+    where next_phase = GHC.Cpp GHC.HsSrcFile
+#endif
+
+guessTarget :: GhcMonad m => String -> Maybe GHC.Phase -> m GHC.Target
+#if MIN_VERSION_ghc(9,4,0)
+guessTarget t pM = GHC.guessTarget t Nothing pM
+#else
+guessTarget = GHC.guessTarget
+#endif
+
+loadPhantomModule :: GhcMonad m => GHC.ModuleName -> m GHC.SuccessFlag
+#if MIN_VERSION_ghc(9,4,0)
+loadPhantomModule _ = GHC.load GHC.LoadAllTargets
+#else
+loadPhantomModule m = GHC.load (GHC.LoadUpTo m)
 #endif
