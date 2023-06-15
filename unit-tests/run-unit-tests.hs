@@ -377,8 +377,7 @@ test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
         unsetEnv "GHC_ENVIRONMENT"
 
         wrapInterp (unsafeRunInterpreterWithArgs ghc_args) $ do
-          --succeeds (setImports [mod]) @@? "module from package-db must be visible"
-          setImports [mod]
+          succeeds (setImports [mod]) @@? "module from package-db must be visible"
     --
     where pkg      = "my-package"
           dir      = pkg
@@ -405,6 +404,53 @@ test_package_db = IOTestCase "package_db" [dir] $ \wrapInterp -> do
                             -- that it cannot run if that variable is set.
                             setEnv (filter ((/= "GHC_PACKAGE_PATH") . fst) env)
                           $ proc "cabal" ["build"]
+
+test_ghc_environment_file :: IOTestCase
+test_ghc_environment_file = IOTestCase "ghc_environment_file" [dir] $ \wrapInterp -> do
+        setup
+
+        -- stack sets GHC_ENVIRONMENT to a file which pins down the versions of
+        -- all the packages we can load, and since it does not list my-package,
+        -- we cannot load it.
+        unsetEnv "GHC_ENVIRONMENT"
+
+        wrapInterp runInterpreter $ do
+          fails (setImports ["Acme.Dont"]) @@? "acme-dont should not be in path"
+
+        -- in dir, there is a file .ghc.environment.<something> which lists the
+        -- acme-dont package because it is a dependency of my-package. hint
+        -- should detect that file and make containers available to the
+        -- interpreted code.
+        withCurrentDirectory dir $ do
+          wrapInterp runInterpreter $ do
+            succeeds (setImports ["Acme.Dont"]) @@? "acme-dont should be in path"
+    --
+    where pkg      = "my-package"
+          dir      = pkg
+          mod_file = dir </> mod <.> "hs"
+          mod      = "MyModule"
+          cabal_file = dir </> pkg <.> "cabal"
+          setup    = do createDirectory dir
+                        writeFile cabal_file $ unlines
+                          [ "cabal-version: 2.4"
+                          , "name: " ++ pkg
+                          , "version: 0.1.0.0"
+                          , ""
+                          , "library"
+                          , "  exposed-modules: " ++ mod
+                          , "  build-depends: acme-dont"
+                          ]
+                        writeFile mod_file $ unlines
+                          [ "{-# LANGUAGE NoImplicitPrelude #-}"
+                          , "module " ++ mod ++ " where"
+                          ]
+                        env <- getEnvironment
+                        runProcess_
+                          $ setWorkingDir dir
+                          $ -- stack sets GHC_PACKAGE_PATH, but cabal complains
+                            -- that it cannot run if that variable is set.
+                            setEnv (filter ((/= "GHC_PACKAGE_PATH") . fst) env)
+                          $ proc "cabal" ["build", "--write-ghc-environment-files=always"]
 
 -- earlier versions of hint were accidentally overwriting the signal handlers
 -- for ^C and others.
@@ -473,6 +519,7 @@ tests = [test_reload_modified
 ioTests :: [IOTestCase]
 ioTests = [test_signal_handlers
           ,test_package_db
+          ,test_ghc_environment_file
           ]
 
 main :: IO ()
