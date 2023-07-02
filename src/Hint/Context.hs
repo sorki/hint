@@ -32,7 +32,6 @@ import System.Random
 import System.FilePath
 import System.Directory
 
-import Data.Maybe (maybe)
 import Hint.Configuration (setGhcOption)
 import System.IO.Temp
 
@@ -115,7 +114,6 @@ addPhantomModule mod_text =
     do pm <- newPhantomModule
        df <- runGhc GHC.getSessionDynFlags
        let t = GHC.fileTarget df (pmFile pm)
-           m = GHC.mkModuleName (pmName pm)
        --
        liftIO $ writeFile (pmFile pm) (mod_text $ pmName pm)
        --
