@@ -1,7 +1,7 @@
 name: Readme
 
 on:
-  # Run once a month, to detect build failures reported on matrix.hackage.haskell.org
+  # Run once a month, to detect unexpected regressions
   schedule:
     - cron: '0 0 1 * *'
 
