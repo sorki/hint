@@ -55,5 +55,5 @@ jobs:
         DOCTEST_FLAGS="$(echo "$EXTS" | sed 's/^/-X/g')"
 
 
-        stack --stack-yaml="stack-8.10.4.yaml" install doctest
+        stack --stack-yaml="stack-8.10.7.yaml" install doctest
         stack exec -- doctest $DOCTEST_FLAGS $TEST_FILE
