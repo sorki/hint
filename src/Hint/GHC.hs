@@ -47,6 +47,11 @@ import GHC as X hiding (Phase, GhcT, parseDynamicFlags, runGhcT, showGhcExceptio
                        )
 import Control.Monad.Ghc as X (GhcT, runGhcT)
 
+#if MIN_VERSION_ghc(9,8,0)
+import GHC.Types.Error (ResolvedDiagnosticReason(..), Messages)
+import GHC.Driver.Errors.Types (DriverMessage)
+#endif
+
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Types.SourceError as X (SourceError, srcErrorMessages)
 
@@ -429,7 +434,18 @@ putLogMsg :: Logger -> DynFlags -> WarnReason -> Severity -> SrcSpan -> SDoc -> 
 pushLogHook :: (GHC.LogAction -> GHC.LogAction) -> Logger -> Logger
 modifyLogger :: GhcMonad m => (Logger -> Logger) -> m ()
 mkLogAction :: (String -> a) -> IORef [a] -> GHC.LogAction
-#if MIN_VERSION_ghc(9,6,0)
+#if MIN_VERSION_ghc(9,8,0)
+data WarnReason = NoReason
+type Logger = GHC.Logger
+initLogger = GHC.initLogger
+putLogMsg logger _df _wn sev = GHC.putLogMsg logger (GHC.logFlags logger) (GHC.MCDiagnostic sev (ResolvedDiagnosticReason GHC.ErrorWithoutFlag) Nothing)
+pushLogHook = GHC.pushLogHook
+modifyLogger = GHC.modifyLogger
+mkLogAction f r = \lf mc src msg ->
+    let renderErrMsg = GHC.renderWithContext (GHC.log_default_user_context lf)
+        errorEntry   = f (renderErrMsg (GHC.mkLocMessage mc src msg))
+    in modifyIORef r (errorEntry :)
+#elif MIN_VERSION_ghc(9,6,0)
 data WarnReason = NoReason
 type Logger = GHC.Logger
 initLogger = GHC.initLogger
@@ -606,11 +622,17 @@ setBackendToInterpreter df = df{hscTarget = HscInterpreted}
 #endif
 
 -- parseDynamicFlags
-parseDynamicFlags :: MonadIO m => Logger -> DynFlags -> [Located String] -> m (DynFlags, [Located String], [Warn])
+
+#if MIN_VERSION_ghc(9,8,0)
+parseDynamicFlags :: MonadIO m => Logger -> DynFlags -> [Located String] -> m (DynFlags, [Located String], Messages DriverMessage)
+parseDynamicFlags = GHC.parseDynamicFlags
+#else
 #if MIN_VERSION_ghc(9,2,0)
+parseDynamicFlags :: MonadIO m => Logger -> DynFlags -> [Located String] -> m (DynFlags, [Located String], [Warn])
 parseDynamicFlags = GHC.parseDynamicFlags
 #else
 parseDynamicFlags _ = GHC.parseDynamicFlags
+#endif
 #endif
 
 pprTypeForUser :: Type -> SDoc
