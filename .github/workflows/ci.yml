@@ -43,7 +43,7 @@ jobs:
           .stack-work
         key: ${{ runner.os }}-stack-${{ hashFiles(matrix.stack_yaml) }}
 
-    - uses: haskell/actions/setup@v2
+    - uses: haskell-actions/setup@v2
       id: setup-haskell-stack
       name: Setup Stack
       with:
@@ -71,13 +71,13 @@ jobs:
     strategy:
       matrix:
         include:
-          - ghc: latest
+          - ghc-version: '9.8.1'
             os: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v2
 
-    - uses: haskell/actions/setup@v1
+    - uses: haskell-actions/setup@v2
       id: setup-haskell-cabal
       name: Setup Cabal
       with:
